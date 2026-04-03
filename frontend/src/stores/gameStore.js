@@ -1,0 +1,31 @@
+import { create } from "zustand";
+export const useGameStore = create((set) => ({
+    phase: "WAITING",
+    currentMultiplier: 1.0,
+    roundId: null,
+    serverSeedHash: null,
+    bettingEndsAt: null,
+    liveBets: [],
+    myBet: null,
+    lastCrashPoint: null,
+    setPhase: (phase) => set({ phase }),
+    setMultiplier: (currentMultiplier) => set({ currentMultiplier }),
+    setRound: (roundId, serverSeedHash, bettingEndsAt) => set({ roundId, serverSeedHash, bettingEndsAt }),
+    setLiveBets: (liveBets) => set({ liveBets }),
+    addLiveBet: (bet) => set((s) => ({ liveBets: [...s.liveBets.filter((b) => b.id !== bet.id), bet] })),
+    updateLiveBet: (betId, updates) => set((s) => ({
+        liveBets: s.liveBets.map((b) => b.id === betId ? { ...b, ...updates } : b),
+    })),
+    setMyBet: (myBet) => set({ myBet }),
+    updateMyBet: (updates) => set((s) => ({ myBet: s.myBet ? { ...s.myBet, ...updates } : null })),
+    setCrash: (lastCrashPoint) => set({ lastCrashPoint, phase: "CRASHED", currentMultiplier: lastCrashPoint }),
+    reset: () => set({
+        phase: "WAITING",
+        currentMultiplier: 1.0,
+        roundId: null,
+        serverSeedHash: null,
+        bettingEndsAt: null,
+        liveBets: [],
+        myBet: null,
+    }),
+}));

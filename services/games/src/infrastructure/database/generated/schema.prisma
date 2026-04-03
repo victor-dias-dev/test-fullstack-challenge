@@ -1,0 +1,60 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../src/infrastructure/database/generated"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Round {
+  id             String      @id @default(uuid())
+  status         RoundStatus @default(BETTING)
+  crashPoint     Float?
+  serverSeed     String?
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int         @default(0)
+  bettingEndsAt  DateTime
+  startedAt      DateTime?
+  crashedAt      DateTime?
+  createdAt      DateTime    @default(now())
+
+  bets Bet[]
+
+  @@map("rounds")
+}
+
+model Bet {
+  id                String    @id @default(uuid())
+  roundId           String
+  userId            String
+  username          String
+  amountCents       BigInt
+  status            BetStatus @default(PENDING)
+  cashoutMultiplier Float?
+  payoutCents       BigInt?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id])
+
+  @@unique([roundId, userId])
+  @@map("bets")
+}
+
+enum RoundStatus {
+  BETTING
+  RUNNING
+  CRASHED
+}
+
+enum BetStatus {
+  PENDING
+  ACTIVE
+  WON
+  LOST
+  CANCELLED
+}
