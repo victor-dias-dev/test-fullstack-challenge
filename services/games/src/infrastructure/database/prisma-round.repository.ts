@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import type { RoundRepository } from "../../domain/round.repository";
+import { Prisma } from "./generated";
+import type { LeaderboardEntry, RoundRepository } from "../../domain/round.repository";
 import { Round, Bet, RoundStatus, BetStatus } from "../../domain/round.entity";
 import { PrismaService } from "./prisma.service";
 import type { Round as PrismaRound, Bet as PrismaBet } from "./generated";
@@ -68,6 +69,45 @@ export class PrismaRoundRepository implements RoundRepository {
       this.prisma.bet.count({ where: { userId } }),
     ]);
     return { bets: records.map((b) => this.betToDomain(b)), total };
+  }
+
+  async findLeaderboardByProfit(
+    since: Date,
+    limit: number,
+  ): Promise<LeaderboardEntry[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ userId: string; username: string; profitCents: bigint }>
+    >(
+      Prisma.sql`
+        SELECT b."userId",
+               MAX(b.username) AS username,
+               SUM(
+                 CASE
+                   WHEN b.status = 'WON' THEN COALESCE(b."payoutCents", 0) - b."amountCents"
+                   WHEN b.status = 'LOST' THEN -b."amountCents"
+                   ELSE 0
+                 END
+               )::bigint AS "profitCents"
+        FROM bets b
+        WHERE b."updatedAt" >= ${since}
+          AND b.status IN ('WON', 'LOST')
+        GROUP BY b."userId"
+        ORDER BY 3 DESC
+        LIMIT ${limit}
+      `,
+    );
+
+    return rows.map((r) => {
+      const pc =
+        typeof r.profitCents === "bigint"
+          ? r.profitCents
+          : BigInt(String(r.profitCents));
+      return {
+        userId: r.userId,
+        username: r.username,
+        profitCents: pc,
+      };
+    });
   }
 
   async save(round: Round): Promise<Round> {

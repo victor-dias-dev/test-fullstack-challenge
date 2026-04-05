@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "ts-node-dev --respawn src/main.ts",
     "start": "node src/main.ts",
-    "test": "jest tests/unit",
-    "test:e2e": "jest tests/e2e",
+    "test": "bun test tests/unit",
+    "test:e2e": "bun test tests/e2e",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },

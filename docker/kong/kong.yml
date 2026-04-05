@@ -23,6 +23,13 @@ plugins:
 services:
   - name: games-service
     url: http://games:4001
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 600
+          policy: local
+          limit_by: ip
+          fault_tolerant: true
     routes:
       - name: games-routes
         paths:
@@ -31,6 +38,13 @@ services:
 
   - name: wallets-service
     url: http://wallets:4002
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 300
+          policy: local
+          limit_by: ip
+          fault_tolerant: true
     routes:
       - name: wallets-routes
         paths:

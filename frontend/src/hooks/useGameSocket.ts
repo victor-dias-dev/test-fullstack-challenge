@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useGameStore } from "../stores/gameStore";
 import type { BetResponse } from "../lib/api";
+import { playCrashSound } from "../lib/gameSounds";
 
+/** Socket.IO on games service (Kong in this project does not proxy WS) */
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ?? "http://localhost:4001";
 
@@ -30,28 +32,67 @@ export function useGameSocket() {
     });
 
     socket.on("round:crashed", (data: { roundId: string; crashPoint: number }) => {
+      playCrashSound();
+      const st = useGameStore.getState();
+      if (st.myBet?.status === "ACTIVE") {
+        st.updateMyBet({ status: "LOST" });
+      }
       store.setCrash(data.crashPoint);
     });
 
-    socket.on("bet:placed", (data: { roundId: string; username: string; amountCents: string }) => {
-      const fakeBet: BetResponse = {
-        id: `${data.username}-${Date.now()}`,
-        username: data.username,
-        amountCents: data.amountCents,
-        status: "ACTIVE",
-        cashoutMultiplier: null,
-        payoutCents: null,
-      };
-      store.addLiveBet(fakeBet);
+    socket.on(
+      "bet:placed",
+      (data: {
+        betId: string;
+        roundId: string;
+        username: string;
+        amountCents: string;
+      }) => {
+        const liveBet: BetResponse = {
+          id: data.betId,
+          username: data.username,
+          amountCents: data.amountCents,
+          status: "ACTIVE",
+          cashoutMultiplier: null,
+          payoutCents: null,
+        };
+        store.addLiveBet(liveBet);
+
+        const st = useGameStore.getState();
+        const pending = st.myBet;
+        if (
+          pending?.betId === data.betId &&
+          pending.status === "PENDING"
+        ) {
+          st.updateMyBet({ status: "ACTIVE" });
+        }
+      },
+    );
+
+    socket.on("bet:cancelled", (data: { betId: string }) => {
+      const st = useGameStore.getState();
+      if (st.myBet?.betId === data.betId) {
+        st.updateMyBet({ status: "CANCELLED" });
+      }
     });
 
     socket.on(
       "bet:cashout",
-      (data: { username: string; multiplier: number; payoutCents: string }) => {
+      (data: {
+        roundId?: string;
+        username: string;
+        multiplier: number;
+        payoutCents: string;
+      }) => {
         store.setLiveBets(
           useGameStore.getState().liveBets.map((b) =>
             b.username === data.username
-              ? { ...b, status: "WON", cashoutMultiplier: data.multiplier, payoutCents: data.payoutCents }
+              ? {
+                  ...b,
+                  status: "WON",
+                  cashoutMultiplier: data.multiplier,
+                  payoutCents: data.payoutCents,
+                }
               : b,
           ),
         );

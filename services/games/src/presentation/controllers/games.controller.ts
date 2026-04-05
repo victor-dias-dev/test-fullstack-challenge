@@ -76,6 +76,38 @@ export class GamesController {
     };
   }
 
+  @Get("leaderboard")
+  @ApiOperation({ summary: "Top players by net profit on settled bets" })
+  @ApiQuery({
+    name: "period",
+    required: false,
+    enum: ["24h", "week"],
+    description: "24h = last 24 hours, week = last 7 days",
+  })
+  async getLeaderboard(@Query("period") period: string = "24h") {
+    const now = Date.now();
+    const since =
+      period === "week"
+        ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+        : new Date(now - 24 * 60 * 60 * 1000);
+
+    const entries = await this.roundRepository.findLeaderboardByProfit(
+      since,
+      20,
+    );
+
+    return {
+      period: period === "week" ? "week" : "24h",
+      since: since.toISOString(),
+      entries: entries.map((e, i) => ({
+        rank: i + 1,
+        userId: e.userId,
+        username: e.username,
+        profitCents: e.profitCents.toString(),
+      })),
+    };
+  }
+
   @Get("rounds/history")
   @ApiOperation({ summary: "Paginated history of crashed rounds" })
   @ApiQuery({ name: "page", required: false, type: Number })
@@ -194,8 +226,9 @@ export class GamesController {
       multiplier,
     );
 
+    const roundId = this.lifecycle.getCurrentRoundId();
     this.gateway.emitCashout({
-      roundId: result.betId,
+      roundId: roundId ?? result.betId,
       username: req.user.preferred_username,
       multiplier: result.multiplier,
       payoutCents: result.payoutCents.toString(),

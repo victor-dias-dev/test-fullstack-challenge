@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Games unit tests
+        working-directory: services/games
+        run: bun test tests/unit
+
+      - name: Games E2E
+        working-directory: services/games
+        env:
+          SKIP_E2E: "1"
+        run: bun test tests/e2e
+
+      - name: Wallets unit tests
+        working-directory: services/wallets
+        run: bun test tests/unit
+
+      - name: Wallets E2E
+        working-directory: services/wallets
+        env:
+          SKIP_E2E: "1"
+        run: bun test tests/e2e
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: bun run test

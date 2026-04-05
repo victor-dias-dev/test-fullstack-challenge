@@ -4,11 +4,13 @@ import { api, RoundResponse } from "../lib/api";
 import { useGameStore } from "../stores/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CrashChart } from "../components/CrashChart";
+import { CurveFormulaInfo } from "../components/CurveFormulaInfo";
 import { BettingControls } from "../components/BettingControls";
 import { CountdownTimer } from "../components/CountdownTimer";
 import { RoundHistory } from "../components/RoundHistory";
 import { LiveBetsTable } from "../components/LiveBetsTable";
 import { PlayerInfo } from "../components/PlayerInfo";
+import { Leaderboard } from "../components/Leaderboard";
 
 export function GamePage() {
   useGameSocket();
@@ -60,6 +62,7 @@ export function GamePage() {
           {/* Chart — takes 2/3 */}
           <div className="lg:col-span-2 space-y-4">
             <CrashChart />
+            <CurveFormulaInfo />
             <BettingControls />
           </div>
 
@@ -68,6 +71,7 @@ export function GamePage() {
             <PlayerInfo />
             <LiveBetsTable />
             <RoundHistory />
+            <Leaderboard />
           </div>
         </div>
       </div>

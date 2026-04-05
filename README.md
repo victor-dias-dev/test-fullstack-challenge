@@ -258,12 +258,16 @@ O placeholder no `docker-compose.yml` está comentado — descomente e adapte co
 
 As credenciais de infraestrutura (PostgreSQL, RabbitMQ, Keycloak) estão hardcoded no `docker-compose.yml` — são valores de desenvolvimento local, sem necessidade de `.env` no root.
 
-Cada serviço possui `.env.example` com as variáveis necessárias. Copie para `.env` antes de rodar fora do Docker:
+O `docker-compose.yml` injeta `DATABASE_URL`, RabbitMQ e Keycloak para os serviços — não é necessário criar `services/games/.env` nem `services/wallets/.env` só para subir os containers.
+
+Para rodar **games** ou **wallets** na máquina (fora do Docker), cada um tem `.env.example`. Copie para `.env`:
 
 ```bash
 cp services/games/.env.example services/games/.env
 cp services/wallets/.env.example services/wallets/.env
 ```
+
+Para `vite dev` no **frontend**, use `frontend/.env.example` como base (`cp frontend/.env.example frontend/.env`). O build Docker do frontend recebe `VITE_*` via args do Compose.
 
 **Você pode modificar qualquer parte da infra.** Prefere SQS ao invés de RabbitMQ? Outro API Gateway? Outro IdP? Fique à vontade. O único requisito é que **`bun run docker:up` suba tudo**.
 
@@ -427,6 +431,19 @@ Não obrigatórios, mas diferenciam candidatos excepcionais:
 - **Fórmula da curva na UI** — Exibir a fórmula para transparência
 
 ---
+
+## Bônus implementados neste repositório
+
+- **CI** — `.github/workflows/ci.yml` (testes em push/PR com Bun)
+- **Rate limiting** — plugins no Kong (`docker/kong/kong.yml`)
+- **Fórmula da curva** — `CurveFormulaInfo` + mesma fórmula exponencial do servidor
+- **Auto cashout** — multiplicador alvo na UI (`BettingControls`)
+- **Efeitos sonoros** — `frontend/src/lib/gameSounds.ts` (Web Audio API)
+- **Seed E2E** — guia reproduzível em `scripts/e2e-deterministic.md`
+- **Auto bet** — estratégia fixa ou Martingale (dobra após perda, teto R$ 1.000,00), stop-loss de sessão e P&amp;L da sessão em [`BettingControls`](frontend/src/components/BettingControls.tsx) + [`autoBetStore`](frontend/src/stores/autoBetStore.ts)
+- **Leaderboard** — `GET /games/leaderboard?period=24h|week` (lucro líquido em apostas liquidadas no período) + UI em [`Leaderboard.tsx`](frontend/src/components/Leaderboard.tsx)
+
+Não implementados aqui: Outbox/Inbox transacional, stack OpenTelemetry/Prometheus/Grafana, Playwright, Storybook.
 
 ## Dúvidas? ❓
 

@@ -1,8 +1,7 @@
 import keycloak from "./keycloak";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-
-console.log("API_URL", API_URL);
+/** Kong proxy in local Docker — see frontend/.env.example */
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 async function request<T>(
   path: string,
@@ -65,4 +64,17 @@ export interface HistoryRound {
   crashPoint: number;
   crashedAt: string;
   serverSeedHash: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  profitCents: string;
+}
+
+export interface LeaderboardResponse {
+  period: string;
+  since: string;
+  entries: LeaderboardEntry[];
 }

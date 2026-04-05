@@ -1,11 +1,18 @@
 import { Round, Bet } from "./round.entity";
 
+export interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  profitCents: bigint;
+}
+
 export interface RoundRepository {
   findById(id: string): Promise<Round | null>;
   findCurrent(): Promise<Round | null>;
   findHistory(page: number, limit: number): Promise<{ rounds: Round[]; total: number }>;
   findBetById(betId: string): Promise<Bet | null>;
   findBetsByUserId(userId: string, page: number, limit: number): Promise<{ bets: Bet[]; total: number }>;
+  findLeaderboardByProfit(since: Date, limit: number): Promise<LeaderboardEntry[]>;
   save(round: Round): Promise<Round>;
   createBet(bet: Bet): Promise<void>;
   updateRoundStatus(round: Round): Promise<void>;

@@ -53,6 +53,7 @@ export class GameGateway implements OnGatewayInit {
       },
       onBetActivated: (bet) => {
         this.server.emit("bet:placed", {
+          betId: bet.id,
           roundId: bet.roundId,
           username: bet.username,
           amountCents: bet.amountCents.toString(),
