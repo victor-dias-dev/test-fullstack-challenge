@@ -1,20 +1,17 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import * as amqplib from "amqplib";
+import type { GameMessageBus } from "../../application/ports/game-message-bus.port";
+import { MESSAGING_ROUTING_KEYS } from "../../domain/messaging-routing-keys";
 
 export const EXCHANGE = "crash-game";
 
-export const ROUTING_KEYS = {
-  WALLET_DEBIT: "wallet.debit",
-  WALLET_CREDIT: "wallet.credit",
-  WALLET_DEBITED: "wallet.debited",
-  WALLET_DEBIT_FAILED: "wallet.debit.failed",
-  WALLET_CREDITED: "wallet.credited",
-} as const;
+/** @deprecated Prefer MESSAGING_ROUTING_KEYS from domain */
+export const ROUTING_KEYS = MESSAGING_ROUTING_KEYS;
 
 type SubscribeHandler = (msg: Record<string, unknown>) => Promise<void>;
 
 @Injectable()
-export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
+export class RabbitMQService implements OnModuleInit, OnModuleDestroy, GameMessageBus {
   private readonly logger = new Logger(RabbitMQService.name);
   private connection: amqplib.ChannelModel | null = null;
   private channel: amqplib.Channel | null = null;
@@ -41,13 +38,12 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
         await ch.assertExchange(EXCHANGE, "topic", { durable: true });
 
-        // Assert queues for game service (receives wallet responses)
         const gameQueue = await ch.assertQueue("games.wallet-responses", {
           durable: true,
         });
-        await ch.bindQueue(gameQueue.queue, EXCHANGE, ROUTING_KEYS.WALLET_DEBITED);
-        await ch.bindQueue(gameQueue.queue, EXCHANGE, ROUTING_KEYS.WALLET_DEBIT_FAILED);
-        await ch.bindQueue(gameQueue.queue, EXCHANGE, ROUTING_KEYS.WALLET_CREDITED);
+        await ch.bindQueue(gameQueue.queue, EXCHANGE, MESSAGING_ROUTING_KEYS.WALLET_DEBITED);
+        await ch.bindQueue(gameQueue.queue, EXCHANGE, MESSAGING_ROUTING_KEYS.WALLET_DEBIT_FAILED);
+        await ch.bindQueue(gameQueue.queue, EXCHANGE, MESSAGING_ROUTING_KEYS.WALLET_CREDITED);
 
         await ch.consume(gameQueue.queue, async (msg) => {
           if (!msg) return;

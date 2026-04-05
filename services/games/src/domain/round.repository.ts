@@ -1,4 +1,4 @@
-import { Round, Bet } from "./round.entity";
+import { Round, Bet, BetStatus } from "./round.entity";
 
 export interface LeaderboardEntry {
   userId: string;
@@ -19,7 +19,7 @@ export interface RoundRepository {
   updateBetStatus(
     betId: string,
     data: {
-      status: string;
+      status: BetStatus;
       cashoutMultiplier?: number;
       payoutCents?: bigint;
     },

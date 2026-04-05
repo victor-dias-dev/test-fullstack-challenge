@@ -4,7 +4,11 @@ import { ROUND_REPOSITORY } from "../domain/round.repository";
 import type { RoundRepository } from "../domain/round.repository";
 import { Round, BetStatus } from "../domain/round.entity";
 import { ProvablyFairService } from "../domain/provably-fair.service";
-import { RabbitMQService, ROUTING_KEYS } from "../infrastructure/messaging/rabbitmq.service";
+import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
+import {
+  GAME_MESSAGE_BUS,
+  type GameMessageBus,
+} from "./ports/game-message-bus.port";
 
 const BETTING_PHASE_MS = 10_000;  // 10 seconds
 const MULTIPLIER_TICK_MS = 100;   // emit every 100ms
@@ -28,17 +32,18 @@ export class RoundLifecycleService implements OnModuleInit {
   constructor(
     @Inject(ROUND_REPOSITORY)
     private readonly roundRepository: RoundRepository,
-    private readonly rabbitMQ: RabbitMQService,
+    @Inject(GAME_MESSAGE_BUS)
+    private readonly messageBus: GameMessageBus,
   ) {}
 
   async onModuleInit(): Promise<void> {
     // Subscribe to wallet responses
-    this.rabbitMQ.subscribe(
-      ROUTING_KEYS.WALLET_DEBITED,
+    this.messageBus.subscribe(
+      MESSAGING_ROUTING_KEYS.WALLET_DEBITED,
       async (msg) => await this.handleWalletDebited(msg),
     );
-    this.rabbitMQ.subscribe(
-      ROUTING_KEYS.WALLET_DEBIT_FAILED,
+    this.messageBus.subscribe(
+      MESSAGING_ROUTING_KEYS.WALLET_DEBIT_FAILED,
       async (msg) => await this.handleWalletDebitFailed(msg),
     );
 

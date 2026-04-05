@@ -6,14 +6,16 @@ import { CreditWalletUseCase } from "../../application/credit-wallet.use-case";
 interface DebitMessage {
   betId: string;
   userId: string;
-  amountCents: number;
+  /** Serialized bigint cents (games service publishes string). */
+  amountCents: string;
   correlationId: string;
 }
 
 interface CreditMessage {
   betId: string;
   userId: string;
-  amountCents: number;
+  /** Serialized bigint cents (games service publishes string). */
+  amountCents: string;
   correlationId: string;
 }
 
@@ -44,7 +46,7 @@ export class WalletEventsConsumer implements OnModuleInit {
 
     const result = await this.debitWallet.execute({
       userId: msg.userId,
-      amountCents: BigInt(msg.amountCents),
+      amountCents: BigInt(String(msg.amountCents)),
       correlationId: msg.correlationId,
       description: `Bet ${msg.betId}`,
     });
@@ -70,7 +72,7 @@ export class WalletEventsConsumer implements OnModuleInit {
 
     await this.creditWallet.execute({
       userId: msg.userId,
-      amountCents: BigInt(msg.amountCents),
+      amountCents: BigInt(String(msg.amountCents)),
       correlationId: msg.correlationId,
       description: `Cashout bet ${msg.betId}`,
     });

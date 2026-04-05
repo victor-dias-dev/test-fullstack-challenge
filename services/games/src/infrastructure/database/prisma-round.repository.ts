@@ -153,12 +153,12 @@ export class PrismaRoundRepository implements RoundRepository {
 
   async updateBetStatus(
     betId: string,
-    data: { status: string; cashoutMultiplier?: number; payoutCents?: bigint },
+    data: { status: BetStatus; cashoutMultiplier?: number; payoutCents?: bigint },
   ): Promise<void> {
     await this.prisma.bet.update({
       where: { id: betId },
       data: {
-        status: data.status as BetStatus,
+        status: data.status,
         cashoutMultiplier: data.cashoutMultiplier,
         payoutCents: data.payoutCents,
       },

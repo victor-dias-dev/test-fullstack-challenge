@@ -8,7 +8,11 @@ import { v4 as uuidv4 } from "uuid";
 import { ROUND_REPOSITORY } from "../domain/round.repository";
 import type { RoundRepository } from "../domain/round.repository";
 import { BetStatus, RoundStatus } from "../domain/round.entity";
-import { RabbitMQService, ROUTING_KEYS } from "../infrastructure/messaging/rabbitmq.service";
+import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
+import {
+  GAME_MESSAGE_BUS,
+  type GameMessageBus,
+} from "./ports/game-message-bus.port";
 
 export interface CashOutCommand {
   userId: string;
@@ -25,7 +29,8 @@ export class CashOutUseCase {
   constructor(
     @Inject(ROUND_REPOSITORY)
     private readonly roundRepository: RoundRepository,
-    private readonly rabbitMQ: RabbitMQService,
+    @Inject(GAME_MESSAGE_BUS)
+    private readonly messageBus: GameMessageBus,
   ) {}
 
   async execute(
@@ -58,7 +63,7 @@ export class CashOutUseCase {
       payoutCents,
     });
 
-    await this.rabbitMQ.publish(ROUTING_KEYS.WALLET_CREDIT, {
+    await this.messageBus.publish(MESSAGING_ROUTING_KEYS.WALLET_CREDIT, {
       betId: bet.id,
       userId: command.userId,
       amountCents: payoutCents.toString(),

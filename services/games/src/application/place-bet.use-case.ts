@@ -7,7 +7,11 @@ import { v4 as uuidv4 } from "uuid";
 import { ROUND_REPOSITORY } from "../domain/round.repository";
 import type { RoundRepository } from "../domain/round.repository";
 import { Bet, RoundStatus } from "../domain/round.entity";
-import { RabbitMQService, ROUTING_KEYS } from "../infrastructure/messaging/rabbitmq.service";
+import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
+import {
+  GAME_MESSAGE_BUS,
+  type GameMessageBus,
+} from "./ports/game-message-bus.port";
 
 export interface PlaceBetCommand {
   userId: string;
@@ -20,7 +24,8 @@ export class PlaceBetUseCase {
   constructor(
     @Inject(ROUND_REPOSITORY)
     private readonly roundRepository: RoundRepository,
-    private readonly rabbitMQ: RabbitMQService,
+    @Inject(GAME_MESSAGE_BUS)
+    private readonly messageBus: GameMessageBus,
   ) {}
 
   async execute(command: PlaceBetCommand): Promise<{ betId: string; roundId: string }> {
@@ -58,7 +63,7 @@ export class PlaceBetUseCase {
     await this.roundRepository.createBet(bet);
 
     // Publish debit request — wallet service responds via wallet.debited / wallet.debit.failed
-    await this.rabbitMQ.publish(ROUTING_KEYS.WALLET_DEBIT, {
+    await this.messageBus.publish(MESSAGING_ROUTING_KEYS.WALLET_DEBIT, {
       betId,
       userId: command.userId,
       amountCents: command.amountCents.toString(),

@@ -7,8 +7,6 @@ import {
   Query,
   Req,
   UseGuards,
-  BadRequestException,
-  Inject,
 } from "@nestjs/common";
 import { Request } from "express";
 import {
@@ -21,9 +19,11 @@ import { JwtAuthGuard, JwtPayload } from "../../infrastructure/auth/jwt.guard";
 import { PlaceBetUseCase } from "../../application/place-bet.use-case";
 import { CashOutUseCase } from "../../application/cashout.use-case";
 import { RoundLifecycleService } from "../../application/round-lifecycle.service";
-import { ProvablyFairService } from "../../domain/provably-fair.service";
-import { ROUND_REPOSITORY } from "../../domain/round.repository";
-import type { RoundRepository } from "../../domain/round.repository";
+import { GetCurrentRoundQuery } from "../../application/queries/get-current-round.query";
+import { GetLeaderboardQuery } from "../../application/queries/get-leaderboard.query";
+import { GetRoundHistoryQuery } from "../../application/queries/get-round-history.query";
+import { VerifyRoundQuery } from "../../application/queries/verify-round.query";
+import { GetMyBetsQuery } from "../../application/queries/get-my-bets.query";
 import { PlaceBetDto } from "../dtos/place-bet.dto";
 import { GameGateway } from "../gateways/game.gateway";
 import { HealthCheckResponseDto } from "../dtos/health-check-response.dto";
@@ -38,8 +38,11 @@ export class GamesController {
     private readonly cashOut: CashOutUseCase,
     private readonly lifecycle: RoundLifecycleService,
     private readonly gateway: GameGateway,
-    @Inject(ROUND_REPOSITORY)
-    private readonly roundRepository: RoundRepository,
+    private readonly getCurrentRoundQuery: GetCurrentRoundQuery,
+    private readonly getLeaderboardQuery: GetLeaderboardQuery,
+    private readonly getRoundHistoryQuery: GetRoundHistoryQuery,
+    private readonly verifyRoundQuery: VerifyRoundQuery,
+    private readonly getMyBetsQuery: GetMyBetsQuery,
   ) {}
 
   @Get("health")
@@ -50,30 +53,7 @@ export class GamesController {
   @Get("rounds/current")
   @ApiOperation({ summary: "Get current round state with bets" })
   async getCurrentRound() {
-    const round = await this.roundRepository.findCurrent();
-    if (!round) return { round: null };
-
-    return {
-      round: {
-        id: round.id,
-        status: round.status,
-        serverSeedHash: round.serverSeedHash,
-        bettingEndsAt: round.bettingEndsAt.toISOString(),
-        startedAt: round.startedAt?.toISOString() ?? null,
-        currentMultiplier:
-          round.status === "RUNNING"
-            ? this.lifecycle.getCurrentMultiplier()
-            : null,
-        bets: round.bets.map((b) => ({
-          id: b.id,
-          username: b.username,
-          amountCents: b.amountCents.toString(),
-          status: b.status,
-          cashoutMultiplier: b.cashoutMultiplier,
-          payoutCents: b.payoutCents?.toString() ?? null,
-        })),
-      },
-    };
+    return this.getCurrentRoundQuery.execute();
   }
 
   @Get("leaderboard")
@@ -85,27 +65,7 @@ export class GamesController {
     description: "24h = last 24 hours, week = last 7 days",
   })
   async getLeaderboard(@Query("period") period: string = "24h") {
-    const now = Date.now();
-    const since =
-      period === "week"
-        ? new Date(now - 7 * 24 * 60 * 60 * 1000)
-        : new Date(now - 24 * 60 * 60 * 1000);
-
-    const entries = await this.roundRepository.findLeaderboardByProfit(
-      since,
-      20,
-    );
-
-    return {
-      period: period === "week" ? "week" : "24h",
-      since: since.toISOString(),
-      entries: entries.map((e, i) => ({
-        rank: i + 1,
-        userId: e.userId,
-        username: e.username,
-        profitCents: e.profitCents.toString(),
-      })),
-    };
+    return this.getLeaderboardQuery.execute(period);
   }
 
   @Get("rounds/history")
@@ -116,56 +76,13 @@ export class GamesController {
     @Query("page") page = "1",
     @Query("limit") limit = "20",
   ) {
-    const { rounds, total } = await this.roundRepository.findHistory(
-      parseInt(page),
-      parseInt(limit),
-    );
-
-    return {
-      data: rounds.map((r) => ({
-        id: r.id,
-        crashPoint: r.crashPoint,
-        crashedAt: r.crashedAt?.toISOString() ?? null,
-        serverSeedHash: r.serverSeedHash,
-      })),
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-    };
+    return this.getRoundHistoryQuery.execute(parseInt(page), parseInt(limit));
   }
 
   @Get("rounds/:roundId/verify")
   @ApiOperation({ summary: "Verify provably fair crash point for a round" })
   async verifyRound(@Param("roundId") roundId: string) {
-    const round = await this.roundRepository.findById(roundId);
-    if (!round) {
-      throw new BadRequestException("Round not found");
-    }
-    if (round.status !== "CRASHED") {
-      return {
-        roundId,
-        status: round.status,
-        message: "Round not yet crashed — verification only available after crash",
-      };
-    }
-
-    const { valid, expectedCrashPoint } = ProvablyFairService.verify(
-      round.serverSeed,
-      round.serverSeedHash,
-      round.clientSeed,
-      round.nonce,
-    );
-
-    return {
-      roundId,
-      valid,
-      serverSeed: round.serverSeed,
-      serverSeedHash: round.serverSeedHash,
-      clientSeed: round.clientSeed,
-      nonce: round.nonce,
-      expectedCrashPoint,
-      actualCrashPoint: round.crashPoint,
-    };
+    return this.verifyRoundQuery.execute(roundId);
   }
 
   @Get("bets/me")
@@ -179,26 +96,11 @@ export class GamesController {
     @Query("page") page = "1",
     @Query("limit") limit = "20",
   ) {
-    const { bets, total } = await this.roundRepository.findBetsByUserId(
+    return this.getMyBetsQuery.execute(
       req.user.sub,
       parseInt(page),
       parseInt(limit),
     );
-
-    return {
-      data: bets.map((b) => ({
-        id: b.id,
-        roundId: b.roundId,
-        amountCents: b.amountCents.toString(),
-        status: b.status,
-        cashoutMultiplier: b.cashoutMultiplier,
-        payoutCents: b.payoutCents?.toString() ?? null,
-        createdAt: b.createdAt.toISOString(),
-      })),
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-    };
   }
 
   @Post("bet")
