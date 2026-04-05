@@ -1,0 +1,6 @@
+dist
+node_modules
+*.local
+
+# Stray JS next to TS/TSX sources (Vite builds from .tsx only)
+src/**/*.js

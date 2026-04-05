@@ -1,7 +1,22 @@
 import keycloak from "./keycloak";
 
-/** Kong proxy in local Docker — see frontend/.env.example */
+/**
+ * Com Kong: só `VITE_API_URL` (ex.: http://localhost:8000) e paths `/games/*`, `/wallets/*`.
+ * Sem Kong: defina `VITE_GAMES_URL` e `VITE_WALLETS_URL` (ex.: :4001 e :4002) — o cliente remove o prefixo.
+ */
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const GAMES_DIRECT = import.meta.env.VITE_GAMES_URL;
+const WALLETS_DIRECT = import.meta.env.VITE_WALLETS_URL;
+
+function resolveRequestUrl(path: string): string {
+  if (GAMES_DIRECT && path.startsWith("/games")) {
+    return `${GAMES_DIRECT}${path.slice("/games".length)}`;
+  }
+  if (WALLETS_DIRECT && path.startsWith("/wallets")) {
+    return `${WALLETS_DIRECT}${path.slice("/wallets".length)}`;
+  }
+  return `${API_URL}${path}`;
+}
 
 async function request<T>(
   path: string,
@@ -13,7 +28,7 @@ async function request<T>(
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(resolveRequestUrl(path), {
     ...options,
     headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
   });

@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.7",
+    "@types/express": "^5.0.6",
     "bun-types": "latest",
     "prisma": "^6.8.2",
     "ts-node-dev": "^2.0.0",

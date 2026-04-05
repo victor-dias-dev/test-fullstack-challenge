@@ -3,7 +3,7 @@ import type { BetResponse } from "../lib/api";
 
 export type GamePhase = "BETTING" | "RUNNING" | "CRASHED" | "WAITING";
 
-interface MyBet {
+export interface MyBet {
   betId: string;
   amountCents: bigint;
   status: "PENDING" | "ACTIVE" | "WON" | "LOST" | "CANCELLED";

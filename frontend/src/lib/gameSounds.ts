@@ -11,17 +11,24 @@ function getContext(): AudioContext {
   return audioContext;
 }
 
-function beep(
+/** Call once after user gesture so browsers allow playback (e.g. first tap on the page). */
+export function unlockGameAudio(): void {
+  try {
+    void getContext().resume();
+  } catch {
+    /* ignore */
+  }
+}
+
+async function beepAsync(
   frequency: number,
   durationMs: number,
   type: OscillatorType = "sine",
   gain = 0.08,
-): void {
+): Promise<void> {
   try {
     const ctx = getContext();
-    if (ctx.state === "suspended") {
-      void ctx.resume();
-    }
+    await ctx.resume();
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = type;
@@ -40,14 +47,17 @@ function beep(
 }
 
 export function playBetSound(): void {
-  beep(660, 80, "square", 0.06);
+  void beepAsync(660, 80, "square", 0.06);
 }
 
 export function playCashoutSound(): void {
-  beep(880, 100, "sine", 0.09);
-  setTimeout(() => beep(1320, 120, "sine", 0.07), 90);
+  void (async () => {
+    await beepAsync(880, 100, "sine", 0.09);
+    await new Promise((r) => setTimeout(r, 90));
+    await beepAsync(1320, 120, "sine", 0.07);
+  })();
 }
 
 export function playCrashSound(): void {
-  beep(120, 400, "sawtooth", 0.12);
+  void beepAsync(120, 400, "sawtooth", 0.12);
 }

@@ -59,4 +59,13 @@ export class WalletsController {
       balanceReais: (Number(wallet.balanceCents) / 100).toFixed(2),
     };
   }
+
+  /** Same as GET /me — Kong strips `/wallets`; direct calls to :4002 often use this path. */
+  @Get("wallets/me")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Alias of GET /me for direct service URL (no gateway)" })
+  getMeViaPrefix(@Req() req: AuthenticatedRequest) {
+    return this.getMe(req);
+  }
 }
