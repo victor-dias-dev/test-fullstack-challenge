@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { Wallet, InsufficientFundsError } from "../../src/domain/wallet.entity";
 
 function makeWallet(balanceCents: bigint = 100000n): Wallet {

@@ -21,23 +21,23 @@ jobs:
 
       - name: Games unit tests
         working-directory: services/games
-        run: bun test tests/unit
+        run: bun run test
 
       - name: Games E2E
         working-directory: services/games
         env:
           SKIP_E2E: "1"
-        run: bun test tests/e2e
+        run: bun run test:e2e
 
       - name: Wallets unit tests
         working-directory: services/wallets
-        run: bun test tests/unit
+        run: bun run test
 
       - name: Wallets E2E
         working-directory: services/wallets
         env:
           SKIP_E2E: "1"
-        run: bun test tests/e2e
+        run: bun run test:e2e
 
       - name: Frontend tests
         working-directory: frontend

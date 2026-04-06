@@ -158,8 +158,12 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: http://localhost:8000
+        VITE_GAMES_URL: http://localhost:4001
+        VITE_WALLETS_URL: http://localhost:4002
         VITE_SOCKET_URL: http://localhost:4001
         VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: crash-game
+        VITE_KEYCLOAK_CLIENT_ID: crash-game-client
     ports:
       - "3000:3000"
     depends_on:

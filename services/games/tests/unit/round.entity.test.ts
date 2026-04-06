@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { Round, Bet, RoundStatus, BetStatus, DomainError } from "../../src/domain/round.entity";
 
 function makeBet(userId = "user-1", amountCents = 5000n): Bet {

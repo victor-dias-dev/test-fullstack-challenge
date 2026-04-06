@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { ProvablyFairService } from "../../src/domain/provably-fair.service";
 
 describe("ProvablyFairService", () => {
