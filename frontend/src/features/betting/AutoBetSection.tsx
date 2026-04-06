@@ -65,13 +65,17 @@ export function AutoBetSection({
             </label>
             <input
               type="number"
-              min={1}
-              max={1000}
-              step={1}
+              inputMode="decimal"
+              step={0.01}
               value={baseReais}
-              onChange={(e) =>
-                onBaseReaisChange(Math.round(parseFloat(e.target.value) * 100) || MIN_AUTO_STAKE)
-              }
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "" || raw === ".") return;
+                const reais = Number.parseFloat(raw.replace(",", "."));
+                if (!Number.isFinite(reais)) return;
+                const cents = Math.round(reais * 100);
+                onBaseReaisChange(cents > 0 ? cents : MIN_AUTO_STAKE);
+              }}
               className="w-full rounded-lg border border-[#2a2a3d] bg-[#12121a] px-3 py-2 text-sm text-white tabular-nums focus:border-[#6366f1]/50 focus:outline-none focus:ring-1 focus:ring-[#6366f1]/30"
             />
           </div>

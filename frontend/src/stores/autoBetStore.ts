@@ -1,7 +1,11 @@
 import { create } from "zustand";
+import {
+  MIN_STAKE_CENTS,
+  MAX_STAKE_CENTS,
+} from "../features/betting/betting.constants";
 
-export const MIN_AUTO_STAKE = 100;
-export const MAX_AUTO_STAKE = 100_000;
+export const MIN_AUTO_STAKE = MIN_STAKE_CENTS;
+export const MAX_AUTO_STAKE = MAX_STAKE_CENTS;
 
 export type AutoBetStrategy = "fixed" | "martingale";
 

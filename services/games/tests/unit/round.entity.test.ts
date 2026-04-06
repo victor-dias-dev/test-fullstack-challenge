@@ -45,9 +45,9 @@ describe("Round entity", () => {
       expect(() => round.placeBet(makeBet("user-1", 99n))).toThrow(DomainError);
     });
 
-    it("rejects bet above maximum (100,000 cents)", () => {
+    it("rejects bet above maximum (1,000,000 cents)", () => {
       const round = makeBettingRound();
-      expect(() => round.placeBet(makeBet("user-1", 100001n))).toThrow(DomainError);
+      expect(() => round.placeBet(makeBet("user-1", 1_000_001n))).toThrow(DomainError);
     });
 
     it("rejects bet when round is not in BETTING status", () => {

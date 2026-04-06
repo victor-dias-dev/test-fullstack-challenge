@@ -184,8 +184,8 @@ export class Round {
     if (bet.amountCents < 100n) {
       throw new DomainError("Minimum bet is 1.00 (100 cents)");
     }
-    if (bet.amountCents > 100000n) {
-      throw new DomainError("Maximum bet is 1000.00 (100000 cents)");
+    if (bet.amountCents > 1_000_000n) {
+      throw new DomainError("Maximum bet is 10000.00 (1000000 cents)");
     }
     this._bets.set(bet.userId, bet);
   }

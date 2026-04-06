@@ -44,8 +44,8 @@ export class PlaceBetUseCase {
     if (command.amountCents < 100n) {
       throw new BadRequestException("Minimum bet is 1.00 (100 cents)");
     }
-    if (command.amountCents > 100000n) {
-      throw new BadRequestException("Maximum bet is 1000.00 (100,000 cents)");
+    if (command.amountCents > 1_000_000n) {
+      throw new BadRequestException("Maximum bet is 10000.00 (1,000,000 cents)");
     }
 
     const betId = uuidv4();

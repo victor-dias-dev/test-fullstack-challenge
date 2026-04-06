@@ -1,4 +1,8 @@
-import { STAKE_CHIP_REAIS } from "./betting.constants";
+import {
+  STAKE_CHIP_REAIS,
+  MIN_STAKE_CENTS,
+  MAX_STAKE_CENTS,
+} from "./betting.constants";
 
 interface StakeInputSectionProps {
   amountReais: string;
@@ -25,11 +29,21 @@ export function StakeInputSection({
           </span>
           <input
             type="number"
-            min="1"
-            max="1000"
-            step="1"
+            inputMode="decimal"
+            step="0.01"
             value={amountReais}
-            onChange={(e) => onAmountCentsChange(Math.round(parseFloat(e.target.value) * 100))}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "" || raw === ".") return;
+              const reais = Number.parseFloat(raw.replace(",", "."));
+              if (!Number.isFinite(reais)) return;
+              const cents = Math.round(reais * 100);
+              const clamped = Math.min(
+                MAX_STAKE_CENTS,
+                Math.max(MIN_STAKE_CENTS, cents),
+              );
+              onAmountCentsChange(clamped);
+            }}
             disabled={!canBetManual}
             className="w-full rounded-xl border border-[#2a2a3d] bg-[#0a0a0f] py-2.5 pl-10 pr-3 text-base font-semibold tabular-nums text-white placeholder:text-[#4a4a60] focus:border-[#6366f1]/60 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 disabled:cursor-not-allowed disabled:opacity-45"
           />
