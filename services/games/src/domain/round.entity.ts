@@ -1,3 +1,6 @@
+import { payoutCents } from "@crash/provably-fair";
+import { MAX_BET_CENTS, MIN_BET_CENTS } from "./bet-limits";
+
 export enum RoundStatus {
   BETTING = "BETTING",
   RUNNING = "RUNNING",
@@ -26,7 +29,7 @@ export class Bet {
   readonly username: string;
   readonly amountCents: bigint;
   private _status: BetStatus;
-  private _cashoutMultiplier: number | null;
+  private _cashoutMultiplierHundredths: bigint | null;
   private _payoutCents: bigint | null;
   readonly createdAt: Date;
 
@@ -37,7 +40,7 @@ export class Bet {
     username: string;
     amountCents: bigint;
     status?: BetStatus;
-    cashoutMultiplier?: number | null;
+    cashoutMultiplierHundredths?: bigint | null;
     payoutCents?: bigint | null;
     createdAt: Date;
   }) {
@@ -47,7 +50,7 @@ export class Bet {
     this.username = props.username;
     this.amountCents = props.amountCents;
     this._status = props.status ?? BetStatus.PENDING;
-    this._cashoutMultiplier = props.cashoutMultiplier ?? null;
+    this._cashoutMultiplierHundredths = props.cashoutMultiplierHundredths ?? null;
     this._payoutCents = props.payoutCents ?? null;
     this.createdAt = props.createdAt;
   }
@@ -56,8 +59,8 @@ export class Bet {
     return this._status;
   }
 
-  get cashoutMultiplier(): number | null {
-    return this._cashoutMultiplier;
+  get cashoutMultiplierHundredths(): bigint | null {
+    return this._cashoutMultiplierHundredths;
   }
 
   get payoutCents(): bigint | null {
@@ -78,20 +81,19 @@ export class Bet {
     this._status = BetStatus.CANCELLED;
   }
 
-  cashout(multiplier: number): bigint {
+  cashout(multiplierHundredths: bigint): bigint {
     if (this._status !== BetStatus.ACTIVE) {
       throw new DomainError("Only ACTIVE bets can be cashed out");
     }
-    if (multiplier < 1.0) {
+    if (multiplierHundredths < 100n) {
       throw new DomainError("Cashout multiplier must be at least 1.00");
     }
 
-    // Use BigInt arithmetic to avoid float imprecision: floor(amount * multiplier * 100) / 100
-    const payoutCents = BigInt(Math.floor(Number(this.amountCents) * multiplier));
-    this._cashoutMultiplier = multiplier;
-    this._payoutCents = payoutCents;
+    const won = payoutCents(this.amountCents, multiplierHundredths);
+    this._cashoutMultiplierHundredths = multiplierHundredths;
+    this._payoutCents = won;
     this._status = BetStatus.WON;
-    return payoutCents;
+    return won;
   }
 
   lose(): void {
@@ -103,7 +105,7 @@ export class Bet {
 export class Round {
   readonly id: string;
   private _status: RoundStatus;
-  private _crashPoint: number | null;
+  private _crashPointHundredths: bigint | null;
   readonly serverSeed: string;
   readonly serverSeedHash: string;
   readonly clientSeed: string;
@@ -117,7 +119,7 @@ export class Round {
   constructor(props: {
     id: string;
     status?: RoundStatus;
-    crashPoint?: number | null;
+    crashPointHundredths?: bigint | null;
     serverSeed: string;
     serverSeedHash: string;
     clientSeed: string;
@@ -130,7 +132,7 @@ export class Round {
   }) {
     this.id = props.id;
     this._status = props.status ?? RoundStatus.BETTING;
-    this._crashPoint = props.crashPoint ?? null;
+    this._crashPointHundredths = props.crashPointHundredths ?? null;
     this.serverSeed = props.serverSeed;
     this.serverSeedHash = props.serverSeedHash;
     this.clientSeed = props.clientSeed;
@@ -146,8 +148,8 @@ export class Round {
     return this._status;
   }
 
-  get crashPoint(): number | null {
-    return this._crashPoint;
+  get crashPointHundredths(): bigint | null {
+    return this._crashPointHundredths;
   }
 
   get startedAt(): Date | null {
@@ -179,13 +181,13 @@ export class Round {
       throw new DomainError("Bets can only be placed during the BETTING phase");
     }
     if (this._bets.has(bet.userId)) {
-      throw new DomainError("Player already has a bet in this round");
+      throw new DomainError("You already have a bet in this round");
     }
-    if (bet.amountCents < 100n) {
+    if (bet.amountCents < MIN_BET_CENTS) {
       throw new DomainError("Minimum bet is 1.00 (100 cents)");
     }
-    if (bet.amountCents > 1_000_000n) {
-      throw new DomainError("Maximum bet is 10000.00 (1000000 cents)");
+    if (bet.amountCents > MAX_BET_CENTS) {
+      throw new DomainError("Maximum bet is 1000.00 (100000 cents)");
     }
     this._bets.set(bet.userId, bet);
   }
@@ -203,21 +205,21 @@ export class Round {
     this._bets.delete(userId);
   }
 
-  cashOutBet(userId: string, multiplier: number): bigint {
+  cashOutBet(userId: string, multiplierHundredths: bigint): bigint {
     if (this._status !== RoundStatus.RUNNING) {
       throw new DomainError("Cash out only allowed during RUNNING phase");
     }
     const bet = this._bets.get(userId);
     if (!bet) throw new DomainError("No active bet found for player");
-    return bet.cashout(multiplier);
+    return bet.cashout(multiplierHundredths);
   }
 
-  crash(crashPoint: number): Bet[] {
+  crash(crashPointHundredths: bigint): Bet[] {
     if (this._status !== RoundStatus.RUNNING) {
       throw new DomainError("Round can only crash from RUNNING state");
     }
     this._status = RoundStatus.CRASHED;
-    this._crashPoint = crashPoint;
+    this._crashPointHundredths = crashPointHundredths;
     this._crashedAt = new Date();
 
     const losingBets: Bet[] = [];

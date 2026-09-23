@@ -15,6 +15,7 @@ import { VerifyRoundQuery } from "./application/queries/verify-round.query";
 import { GetMyBetsQuery } from "./application/queries/get-my-bets.query";
 import { GAME_MESSAGE_BUS } from "./application/ports/game-message-bus.port";
 import { PrismaRoundRepository } from "./infrastructure/database/prisma-round.repository";
+import { OutboxPublisher } from "./infrastructure/messaging/outbox.publisher";
 import { ROUND_REPOSITORY } from "./domain/round.repository";
 
 @Module({
@@ -27,6 +28,7 @@ import { ROUND_REPOSITORY } from "./domain/round.repository";
   providers: [
     { provide: ROUND_REPOSITORY, useClass: PrismaRoundRepository },
     { provide: GAME_MESSAGE_BUS, useExisting: RabbitMQService },
+    OutboxPublisher,
     PlaceBetUseCase,
     CashOutUseCase,
     RoundLifecycleService,

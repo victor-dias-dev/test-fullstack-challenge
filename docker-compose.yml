@@ -100,8 +100,8 @@ services:
   # ---------------------------------------------------------------------------
   games:
     build:
-      context: ./services/games
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/games/Dockerfile
     ports:
       - "4001:4001"
     environment:

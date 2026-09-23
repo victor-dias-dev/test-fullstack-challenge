@@ -15,7 +15,7 @@ export class GetRoundHistoryQuery {
     return {
       data: rounds.map((r) => ({
         id: r.id,
-        crashPoint: r.crashPoint,
+        crashPointHundredths: r.crashPointHundredths?.toString() ?? null,
         crashedAt: r.crashedAt?.toISOString() ?? null,
         serverSeedHash: r.serverSeedHash,
       })),

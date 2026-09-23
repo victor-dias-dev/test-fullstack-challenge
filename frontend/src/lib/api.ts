@@ -61,7 +61,7 @@ export interface RoundResponse {
   serverSeedHash: string;
   bettingEndsAt: string;
   startedAt: string | null;
-  currentMultiplier: number | null;
+  currentMultiplierHundredths: string | null;
   bets: BetResponse[];
 }
 
@@ -70,13 +70,13 @@ export interface BetResponse {
   username: string;
   amountCents: string;
   status: "PENDING" | "ACTIVE" | "WON" | "LOST" | "CANCELLED";
-  cashoutMultiplier: number | null;
+  cashoutMultiplierHundredths: string | null;
   payoutCents: string | null;
 }
 
 export interface HistoryRound {
   id: string;
-  crashPoint: number;
+  crashPointHundredths: string | null;
   crashedAt: string;
   serverSeedHash: string;
 }

@@ -22,16 +22,16 @@ export class GetCurrentRoundQuery {
         serverSeedHash: round.serverSeedHash,
         bettingEndsAt: round.bettingEndsAt.toISOString(),
         startedAt: round.startedAt?.toISOString() ?? null,
-        currentMultiplier:
+        currentMultiplierHundredths:
           round.status === "RUNNING"
-            ? this.lifecycle.getCurrentMultiplier()
+            ? this.lifecycle.getCurrentMultiplierHundredths().toString()
             : null,
         bets: round.bets.map((b) => ({
           id: b.id,
           username: b.username,
           amountCents: b.amountCents.toString(),
           status: b.status,
-          cashoutMultiplier: b.cashoutMultiplier,
+          cashoutMultiplierHundredths: b.cashoutMultiplierHundredths?.toString() ?? null,
           payoutCents: b.payoutCents?.toString() ?? null,
         })),
       },

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { RabbitMQService, ROUTING_KEYS } from "./rabbitmq.service";
 import { DebitWalletUseCase } from "../../application/debit-wallet.use-case";
 import { CreditWalletUseCase } from "../../application/credit-wallet.use-case";
+import type { LedgerResult } from "../../domain/wallet.repository";
 
 interface DebitMessage {
   betId: string;
@@ -17,6 +18,45 @@ interface CreditMessage {
   /** Serialized bigint cents (games service publishes string). */
   amountCents: string;
   correlationId: string;
+}
+
+export interface WalletEvent {
+  routingKey: string;
+  payload: Record<string, unknown>;
+}
+
+export function debitEvent(result: LedgerResult, msg: DebitMessage): WalletEvent {
+  if (result.outcome === "APPLIED") {
+    return {
+      routingKey: ROUTING_KEYS.WALLET_DEBITED,
+      payload: {
+        betId: msg.betId,
+        userId: msg.userId,
+        correlationId: msg.correlationId,
+      },
+    };
+  }
+  return {
+    routingKey: ROUTING_KEYS.WALLET_DEBIT_FAILED,
+    payload: {
+      betId: msg.betId,
+      userId: msg.userId,
+      correlationId: msg.correlationId,
+      reason: result.reason,
+    },
+  };
+}
+
+export function creditEvent(result: LedgerResult, msg: CreditMessage): WalletEvent | null {
+  if (result.outcome !== "APPLIED") return null;
+  return {
+    routingKey: ROUTING_KEYS.WALLET_CREDITED,
+    payload: {
+      betId: msg.betId,
+      userId: msg.userId,
+      correlationId: msg.correlationId,
+    },
+  };
 }
 
 @Injectable()
@@ -51,36 +91,25 @@ export class WalletEventsConsumer implements OnModuleInit {
       description: `Bet ${msg.betId}`,
     });
 
-    if (result.success) {
-      await this.rabbitMQ.publish(ROUTING_KEYS.WALLET_DEBITED, {
-        betId: msg.betId,
-        userId: msg.userId,
-        correlationId: msg.correlationId,
-      });
-    } else {
-      await this.rabbitMQ.publish(ROUTING_KEYS.WALLET_DEBIT_FAILED, {
-        betId: msg.betId,
-        userId: msg.userId,
-        correlationId: msg.correlationId,
-        reason: result.error,
-      });
-    }
+    const event = debitEvent(result, msg);
+    await this.rabbitMQ.publish(event.routingKey, event.payload);
   }
 
   private async handleCredit(msg: CreditMessage): Promise<void> {
     this.logger.log(`Processing credit for bet ${msg.betId}`);
 
-    await this.creditWallet.execute({
+    const result = await this.creditWallet.execute({
       userId: msg.userId,
       amountCents: BigInt(String(msg.amountCents)),
       correlationId: msg.correlationId,
       description: `Cashout bet ${msg.betId}`,
     });
 
-    await this.rabbitMQ.publish(ROUTING_KEYS.WALLET_CREDITED, {
-      betId: msg.betId,
-      userId: msg.userId,
-      correlationId: msg.correlationId,
-    });
+    const event = creditEvent(result, msg);
+    if (!event) {
+      this.logger.warn(`Credit ${msg.correlationId} rejected: ${result.reason}`);
+      return;
+    }
+    await this.rabbitMQ.publish(event.routingKey, event.payload);
   }
 }

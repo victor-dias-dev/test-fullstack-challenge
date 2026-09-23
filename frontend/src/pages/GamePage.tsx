@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, RoundResponse } from "../lib/api";
+import { hundredthsToNumber } from "../lib/money";
 import { useGameStore } from "../stores/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { CrashChart } from "../components/CrashChart";
@@ -32,7 +33,9 @@ export function GamePage() {
         if (r.status === "BETTING") store.setPhase("BETTING");
         else if (r.status === "RUNNING") {
             store.setPhase("RUNNING");
-            if (r.currentMultiplier) store.setMultiplier(r.currentMultiplier);
+            if (r.currentMultiplierHundredths) {
+                store.setMultiplier(hundredthsToNumber(r.currentMultiplierHundredths));
+            }
         } else if (r.status === "CRASHED") {
             store.setPhase("CRASHED");
         }

@@ -10,9 +10,14 @@
     "docker:up": "docker compose up --build",
     "docker:up:detached": "docker compose up --build -d",
     "docker:down": "docker compose down",
-    "docker:prune": "docker compose down -v --rmi all --remove-orphans && docker volume prune -f"
+    "docker:prune": "docker compose down -v --rmi all --remove-orphans && docker volume prune -f",
+    "test": "bun run --cwd packages/provably-fair test && bun run --cwd services/games test && bun run --cwd services/wallets test && bun run --cwd frontend test",
+    "test:integration": "bun run --cwd services/games test:integration && bun run --cwd services/wallets test:integration",
+    "typecheck": "bun run --cwd packages/provably-fair build && bun run --cwd services/games typecheck && bun run --cwd services/wallets typecheck && bun run --cwd frontend typecheck",
+    "lint": "biome check ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.2.4",
     "bun-types": "latest"
   }
 }

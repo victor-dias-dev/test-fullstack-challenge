@@ -1,0 +1,12 @@
+name: Change
+description: A design or documentation change
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change
+      description: Link the ADR or the code path if this replaces a decision that is already written down.
+    validations:
+      required: true

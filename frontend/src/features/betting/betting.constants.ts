@@ -1,11 +1,11 @@
 import type { GamePhase } from "../../stores/gameStore";
 
-/** Stake limits in cents — must match games service (`PlaceBetDto` / domain). */
+/** Stake limits in cents — must match games service (`MIN_BET_CENTS` / `MAX_BET_CENTS`). */
 export const MIN_STAKE_CENTS = 100;
-/** R$ 10,000.00 — literal avoids any bundler confusion with numeric separators. */
-export const MAX_STAKE_CENTS = 1000000;
+/** R$ 1,000.00 */
+export const MAX_STAKE_CENTS = 100000;
 export const MIN_STAKE_REAIS = 1;
-export const MAX_STAKE_REAIS = 10000;
+export const MAX_STAKE_REAIS = 1000;
 
 export const STAKE_CHIP_REAIS = [1, 5, 10, 100] as const;
 

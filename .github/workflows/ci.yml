@@ -7,38 +7,75 @@ on:
     branches: [main, master]
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.2
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile || bun install
+        run: bun install --frozen-lockfile
 
-      - name: Games unit tests
-        working-directory: services/games
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Unit tests
         run: bun run test
 
-      - name: Games E2E
-        working-directory: services/games
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.3-alpine
         env:
-          SKIP_E2E: "1"
-        run: bun run test:e2e
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      rabbitmq:
+        image: rabbitmq:4.2.4-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      GAMES_DATABASE_URL: postgresql://admin:admin@localhost:5432/games
+      WALLETS_DATABASE_URL: postgresql://admin:admin@localhost:5432/wallets
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Wallets unit tests
-        working-directory: services/wallets
-        run: bun run test
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
 
-      - name: Wallets E2E
-        working-directory: services/wallets
-        env:
-          SKIP_E2E: "1"
-        run: bun run test:e2e
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Frontend tests
-        working-directory: frontend
-        run: bun run test
+      - name: Create service databases
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD=admin psql -h localhost -U admin -d postgres -c "CREATE DATABASE games;"
+          PGPASSWORD=admin psql -h localhost -U admin -d postgres -c "CREATE DATABASE wallets;"
+
+      - name: Generate Prisma clients
+        run: bun run --cwd packages/provably-fair build && bun run --cwd services/games prisma:generate && bun run --cwd services/wallets prisma:generate
+
+      - name: Integration tests
+        run: bun run test:integration

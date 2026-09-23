@@ -7,12 +7,8 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { ROUND_REPOSITORY } from "../domain/round.repository";
 import type { RoundRepository } from "../domain/round.repository";
-import { BetStatus, RoundStatus } from "../domain/round.entity";
+import { BetStatus, DomainError, RoundStatus } from "../domain/round.entity";
 import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
-import {
-  GAME_MESSAGE_BUS,
-  type GameMessageBus,
-} from "./ports/game-message-bus.port";
 
 export interface CashOutCommand {
   userId: string;
@@ -20,7 +16,7 @@ export interface CashOutCommand {
 
 export interface CashOutResult {
   betId: string;
-  multiplier: number;
+  multiplierHundredths: bigint;
   payoutCents: bigint;
 }
 
@@ -29,13 +25,11 @@ export class CashOutUseCase {
   constructor(
     @Inject(ROUND_REPOSITORY)
     private readonly roundRepository: RoundRepository,
-    @Inject(GAME_MESSAGE_BUS)
-    private readonly messageBus: GameMessageBus,
   ) {}
 
   async execute(
     command: CashOutCommand,
-    currentMultiplier: number,
+    currentMultiplierHundredths: bigint,
   ): Promise<CashOutResult> {
     const round = await this.roundRepository.findCurrent();
 
@@ -54,22 +48,37 @@ export class CashOutUseCase {
       );
     }
 
-    const payoutCents = round.cashOutBet(command.userId, currentMultiplier);
+    const payoutCents = round.cashOutBet(command.userId, currentMultiplierHundredths);
     const correlationId = uuidv4();
 
-    await this.roundRepository.updateBetStatus(bet.id, {
-      status: BetStatus.WON,
-      cashoutMultiplier: currentMultiplier,
-      payoutCents,
-    });
+    try {
+      await this.roundRepository.cashOutWithOutbox(
+        bet.id,
+        {
+          cashoutMultiplierHundredths: currentMultiplierHundredths,
+          payoutCents,
+        },
+        {
+          routingKey: MESSAGING_ROUTING_KEYS.WALLET_CREDIT,
+          payload: {
+            betId: bet.id,
+            userId: command.userId,
+            amountCents: payoutCents.toString(),
+            correlationId,
+          },
+        },
+      );
+    } catch (err) {
+      if (err instanceof DomainError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
 
-    await this.messageBus.publish(MESSAGING_ROUTING_KEYS.WALLET_CREDIT, {
+    return {
       betId: bet.id,
-      userId: command.userId,
-      amountCents: payoutCents.toString(),
-      correlationId,
-    });
-
-    return { betId: bet.id, multiplier: currentMultiplier, payoutCents };
+      multiplierHundredths: currentMultiplierHundredths,
+      payoutCents,
+    };
   }
 }

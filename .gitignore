@@ -31,3 +31,7 @@ yarn-error.log*
 
 # Test coverage
 coverage/
+
+# Prisma client (generated in the image and in CI)
+services/*/src/infrastructure/database/generated/
+

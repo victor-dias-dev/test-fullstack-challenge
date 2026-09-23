@@ -10,6 +10,7 @@ import {
   MAX_AUTO_STAKE,
 } from "../../stores/autoBetStore";
 import { playBetSound, playCashoutSound } from "../../lib/gameSounds";
+import { formatMultiplier } from "../../lib/money";
 import type { PlaceBetResponse, CashOutResponse, ToastState } from "./betting.types";
 
 export function useBettingPanel() {
@@ -82,11 +83,14 @@ export function useBettingPanel() {
         setMyBet({
           ...st,
           status: "WON",
-          cashoutMultiplier: data.multiplier,
+          cashoutMultiplierHundredths: data.multiplierHundredths,
           payoutCents: BigInt(data.payoutCents),
         });
       }
-      showToast("success", `Cashed out at ${data.multiplier.toFixed(2)}x — R$${payout}!`);
+      showToast(
+        "success",
+        `Cashed out at ${formatMultiplier(data.multiplierHundredths)}x — R$${payout}!`,
+      );
       void refetchWallet();
       void qc.invalidateQueries({ queryKey: ["wallet"] });
     },

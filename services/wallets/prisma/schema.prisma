@@ -36,7 +36,28 @@ model Transaction {
   @@map("transactions")
 }
 
+model InboxMessage {
+  id            String       @id @default(uuid())
+  correlationId String       @unique
+  kind          InboxKind
+  outcome       InboxOutcome
+  reason        String?
+  createdAt     DateTime     @default(now())
+
+  @@map("inbox_messages")
+}
+
 enum TransactionType {
   CREDIT
   DEBIT
+}
+
+enum InboxKind {
+  DEBIT
+  CREDIT
+}
+
+enum InboxOutcome {
+  APPLIED
+  REJECTED
 }
