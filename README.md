@@ -1,86 +1,47 @@
 # Crash Game
 
-An educational reference for a multiplayer crash game: a multiplier climbs from 1.00x and stops at a point chosen before the round. Players bet during a betting window and cash out before the crash, or they lose the stake.
+[Português](README.pt-BR.md)
 
-This is not a casino and it does not move real money. Balances are integer cents in a local Postgres. Do not point it at a real payment system.
+[![CI](https://github.com/victor-dias-dev/test-fullstack-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/victor-dias-dev/test-fullstack-challenge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Portuguese: [README.pt.md](README.pt.md).
+A multiplayer crash game: the multiplier climbs from 1.00x and stops at a point chosen before the round. Players bet during a betting window and cash out before the crash, or they lose the stake.
 
-## Why the wallet is not an HTTP call
+Balances, stakes, and payouts are integer cents. The game and the wallet are separate services. A debit is written to an outbox in the same transaction as the bet, then published to RabbitMQ. This is a local reference, not a casino. Do not connect it to real money.
 
-A bet has to feel instant: the player clicks, the wallet debits, the bet is accepted. The game and the wallet are separate services with separate databases. A direct HTTP call would couple their uptime and make a timeout ambiguous (did the money move?).
+![Login](docs/screenshots/login.png)
+![Game](docs/screenshots/game.png)
+![Live round](docs/screenshots/round.png)
 
-The game writes the bet and a debit message in one database transaction. A publisher sends that message to RabbitMQ only after the commit. The wallet applies the balance with a conditional `UPDATE` and records the result in an inbox keyed by `correlationId`. A duplicate delivery republishes the same result and does not move the money again.
+## What is in the app
 
-```mermaid
-sequenceDiagram
-  participant Game
-  participant Outbox
-  participant Broker
-  participant Wallet
-  participant Inbox
-  Game->>Outbox: same transaction as the bet
-  Outbox->>Broker: publisher sends only committed rows
-  Broker->>Wallet: wallet.debit
-  Wallet->>Inbox: balance and result in one transaction
-  Wallet->>Broker: republish when the correlationId already exists
-```
+- Keycloak login and one wallet per player
+- Live multiplier, betting window, and cash out
+- Round history and a profit leaderboard
+- Provably fair crash point, verifiable after the round
+- Debit and credit between game and wallet through RabbitMQ
 
-The longer version is [docs/why-not-http.md](docs/why-not-http.md).
+## Requirements
 
-## Money and provably fair
+- Docker Compose v2
+- [Bun](https://bun.sh), to run tests or services outside Docker
 
-Stakes, balances, and payouts are integer cents. The crash point and the cashout multiplier are integer hundredths (`100` is `1.00x`). Payout is `amountCents * multiplierHundredths / 100`, truncated toward zero. There is no float on a balance or a payout.
-
-One percent of the 52-bit HMAC space crashes at exactly `1.00x`. The formula, the known test vector, and `verify` live in [`packages/provably-fair`](packages/provably-fair) (`@crash/provably-fair`). Publish that package with `bun publish` from its directory after `bun run build`. The apps in this repo stay private.
-
-Bet limits are `100` cents minimum and `100_000` cents maximum (1.00 to 1,000.00).
-
-## Shape
-
-| Piece | Role |
-| --- | --- |
-| `services/games` | Rounds, bets, provably fair crash point, WebSocket, outbox |
-| `services/wallets` | One wallet per player, atomic debit and credit, inbox |
-| `packages/provably-fair` | Crash point and integer payout |
-| RabbitMQ | Debit and credit between the two services |
-| Kong | HTTP gateway for `/games` and `/wallets` |
-| Keycloak | OIDC. The WebSocket connects straight to the game service |
-| `frontend` | React, Vite, TanStack Query, Zustand, Socket.IO |
-
-Layers in each service: `domain`, `application`, `infrastructure`, `presentation`.
-
-| Choice | What it buys | What it costs |
-| --- | --- | --- |
-| NestJS HTTP exceptions inside use cases | Fits pipes, filters, and Swagger | Domain errors are less portable outside Nest |
-| Transactional outbox through the broker | A crash between the bet and the publish cannot drop the debit | Latency, plus a publisher and idempotent consumers |
-| WebSocket outside Kong | No gateway upgrade config | The client uses a different socket URL |
-| Frontend production image | Same artifact you would deploy | No hot reload; `VITE_*` is fixed at build time |
-
-Decisions are written up in [docs/adr](docs/adr).
-
-## Run
-
-Requirements: Docker Compose v2, and [Bun](https://bun.sh) if you want to run tests or services outside Docker.
-
-From the repository root:
+## Quick start
 
 ```bash
 bun run docker:up
 ```
 
-That builds and starts Postgres, RabbitMQ, Keycloak, Kong, both services, and the frontend. Logs stay in the foreground. For the background:
+That builds and starts Postgres, RabbitMQ, Keycloak, Kong, both services, and the frontend. Logs stay in the foreground. In the background: `bun run docker:up:detached`.
 
-```bash
-bun run docker:up:detached
-```
-
-If Postgres was initialized once and failed, reset the volume and start again:
+If Postgres was initialized once and failed:
 
 ```bash
 docker compose down -v
 bun run docker:up
 ```
+
+The test player is `player` / `player123`.
 
 | Service | URL |
 | --- | --- |
@@ -90,13 +51,7 @@ bun run docker:up
 | Wallets | http://localhost:4002 |
 | Keycloak | http://localhost:8080 (realm `crash-game`) |
 
-Test player: `player` / `player123`.
-
-This repo uses Bun (`bun.lock`). CI installs with `bun install --frozen-lockfile`, typechecks, lints with Biome, runs unit tests, and runs integration tests against Postgres and RabbitMQ.
-
-### Outside Docker
-
-Leave Postgres, RabbitMQ, and Keycloak in Compose, copy the env examples, build the fair package, then start each app with Bun:
+Outside Docker, leave Postgres, RabbitMQ, and Keycloak in Compose, copy the env examples, build `@crash/provably-fair`, then start each app:
 
 ```bash
 cp services/games/.env.example services/games/.env
@@ -105,25 +60,27 @@ cp frontend/.env.example frontend/.env
 bun run --cwd packages/provably-fair build
 ```
 
-```bash
-cd services/games && bun install && bun run dev
-cd services/wallets && bun install && bun run dev
-cd frontend && bun install && bun run dev
-```
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Postgres database for that service |
+| `RABBITMQ_URL` | Broker URL |
+| `KEYCLOAK_JWKS_URI` | Realm certificate endpoint |
+| `KEYCLOAK_ISSUER` | Expected token issuer |
+| `VITE_API_URL` | Kong base URL for the frontend |
+| `VITE_SOCKET_URL` | Game WebSocket. It does not go through Kong |
+| `VITE_KEYCLOAK_URL` | Keycloak base URL |
 
-### Verify a round
+`VITE_*` values are fixed when the frontend image is built.
 
-After a round crashes, `GET /games/rounds/:roundId/verify` returns the server seed, the client seed, the nonce, and the crash point in hundredths. Recompute it with `verify` from `@crash/provably-fair`. The hash of the server seed was public before the round started. A different seed will not match that hash.
-
-### Tests
+## Checks
 
 ```bash
 bun run test
-bun run typecheck
 bun run lint
+bun run typecheck
 ```
 
-Integration tests need two databases (the services do not share a migration history) and RabbitMQ:
+Integration tests need two databases and RabbitMQ. The services do not share a migration history.
 
 ```bash
 export GAMES_DATABASE_URL=postgresql://admin:admin@localhost:5432/games
@@ -132,11 +89,23 @@ export RABBITMQ_URL=amqp://guest:guest@localhost:5672
 bun run test:integration
 ```
 
-HTTP checks against a running stack stay local:
+HTTP checks against a running stack stay local: `bun run test:e2e` inside `services/games` and `services/wallets`.
 
-```bash
-cd services/games && bun run test:e2e
-cd services/wallets && bun run test:e2e
+## Repository
+
+```text
+services/games          Rounds, bets, crash point, WebSocket, outbox
+services/wallets        Wallet, atomic debit and credit, inbox
+packages/provably-fair  Crash point and integer payout
+frontend                React, Vite, TanStack Query, Zustand
 ```
 
-The original exercise brief is archived in [docs/original-brief.md](docs/original-brief.md).
+Why the wallet is not an HTTP call: [docs/why-not-http.md](docs/why-not-http.md). Decisions: [docs/adr](docs/adr). The formula package: [packages/provably-fair](packages/provably-fair). The original exercise brief is archived in [docs/original-brief.md](docs/original-brief.md).
+
+After a round crashes, `GET /games/rounds/:roundId/verify` returns the seeds and the crash point in hundredths (`100` is `1.00x`). Recompute it with `verify` from `@crash/provably-fair`. One percent of draws crash at exactly `1.00x`. Payout is `amountCents * multiplierHundredths / 100`, truncated toward zero. Stake limits are 1.00 to 1,000.00.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through [private vulnerability reporting](https://github.com/victor-dias-dev/test-fullstack-challenge/security/advisories/new), described in [SECURITY.md](SECURITY.md).
+
+Licensed under the [MIT License](LICENSE).
