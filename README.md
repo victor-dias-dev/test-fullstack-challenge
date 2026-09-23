@@ -1,109 +1,94 @@
-# Crash Game — Full-stack Challenge
+# Crash Game
 
-## Instruções de setup
+A multiplayer crash game built as a take-home. A multiplier climbs from 1.00x and crashes at a predetermined point. Players bet during a betting window and cash out before the crash, or they lose the stake.
 
-### Pré-requisitos
+## The hard decision
 
-- [Bun](https://bun.sh) >= 1.x (ou Node + `pnpm` / `npm` conforme o teu fluxo)
-- Docker Desktop (Compose v2)
+A bet has to feel instant: the player clicks, the wallet debits, the bet is accepted. The game and the wallet are separate services with separate databases, so a direct HTTP call would couple their uptime and make a timeout ambiguous (did the money move?).
 
-### Subir a stack completa
+I kept them apart and used RabbitMQ. The game publishes a debit request and waits for a correlated result. That adds latency and forces idempotency on the wallet side. It also means a wallet failure rejects the bet instead of leaving money and game state out of sync.
 
-Na raiz do repositório (com [Bun](https://bun.sh) ou `npm`/`pnpm`; só precisas de **Docker** a correr):
+Money is integer cents. There is no float on balances or stakes.
+
+## Shape
+
+| Piece | Role |
+| --- | --- |
+| `services/games` | Rounds, bets, provably fair crash point, WebSocket |
+| `services/wallets` | One wallet per player, debit and credit |
+| RabbitMQ | Debit and credit between the two services |
+| Kong | HTTP gateway for `/games` and `/wallets` |
+| Keycloak | OIDC. The WebSocket connects straight to the game service |
+| `frontend` | React, Vite, TanStack Query, Zustand, Socket.IO |
+
+Layers in each service: `domain`, `application`, `infrastructure`, `presentation`.
+
+| Choice | What it buys | What it costs |
+| --- | --- | --- |
+| NestJS HTTP exceptions inside use cases | Fits pipes, filters, and Swagger | Domain errors are less portable outside Nest |
+| Wallet round-trip through the broker | Clear boundary and failure mode | Latency, plus correlation and idempotency |
+| WebSocket outside Kong | No gateway upgrade config | The client uses a different socket URL |
+| Frontend production image | Same artifact you would deploy | No hot reload; `VITE_*` is fixed at build time |
+
+## Run
+
+Requirements: Docker Compose v2, and [Bun](https://bun.sh) if you want to run tests or services outside Docker.
+
+From the repository root:
 
 ```bash
 bun run docker:up
 ```
 
-Isto executa `docker compose up --build`: **reconstrói imagens** quando o `Dockerfile` ou o código mudam e sobe todos os serviços em primeiro plano (logs no terminal). Para segundo plano:
+That builds and starts Postgres, RabbitMQ, Keycloak, Kong, both services, and the frontend. Logs stay in the foreground. For the background:
 
 ```bash
 bun run docker:up:detached
 ```
 
-Se o Postgres já tiver um volume antigo de uma init falhada, antes: `bun run docker:prune` ou `docker compose down -v`, depois `bun run docker:up` outra vez.
-
-### Primeira vez ou Postgres a falhar (exit 126 / bases em falta)
-
-O PostgreSQL cria as bases `games` e `wallets` via `postgres-init-databases.sql` no primeiro arranque com volume vazio. Se o init falhou antes, recria o volume:
+If Postgres was initialized once and failed, reset the volume and start again:
 
 ```bash
 docker compose down -v
-pnpm run docker:up
+bun run docker:up
 ```
 
-### Desenvolvimento local (fora do Docker)
+| Service | URL |
+| --- | --- |
+| Frontend | http://localhost:3000 |
+| Kong | http://localhost:8000 |
+| Games | http://localhost:4001 |
+| Wallets | http://localhost:4002 |
+| Keycloak | http://localhost:8080 (realm `crash-game`) |
 
-1. Infra: Postgres, RabbitMQ e Keycloak podem continuar nos containers; expõe as portas definidas no `docker-compose.yml`.
-2. Copia os exemplos de ambiente:
+Test player: `player` / `player123`.
 
-   ```bash
-   cp services/games/.env.example services/games/.env
-   cp services/wallets/.env.example services/wallets/.env
-   cp frontend/.env.example frontend/.env
-   ```
+This repo uses Bun (`bun.lock`). CI installs with Bun and runs Vitest.
 
-3. Ajusta URLs (`localhost` e portas 5432, 5672, 8080, etc.) conforme o teu `.env`.
-4. Frontend: `cd frontend && pnpm dev` (Vite, porta 3000 por defeito).
-5. Serviços: em cada pasta `services/games` e `services/wallets`, instala dependências e `pnpm run dev` (ou o script definido no `package.json`).
+### Outside Docker
 
-### Testes (games / wallets)
-
-Os testes usam **Vitest**; não é obrigatório ter o **Bun** instalado. Em cada serviço:
+Leave Postgres, RabbitMQ, and Keycloak in Compose, copy the env examples, then start each app with Bun:
 
 ```bash
-cd services/games   # ou services/wallets
-npm install
-npm run test        # unitários
-npm run test:e2e    # HTTP E2E (sobe o stack ou define SKIP_E2E=1 para saltar)
+cp services/games/.env.example services/games/.env
+cp services/wallets/.env.example services/wallets/.env
+cp frontend/.env.example frontend/.env
 ```
 
-Com Bun: `bun install` e `bun run test` também funcionam.
+```bash
+cd services/games && bun install && bun run dev
+cd services/wallets && bun install && bun run dev
+cd frontend && bun install && bun run dev
+```
 
-### URLs úteis (desenvolvimento)
+### Tests
 
-| Serviço   | URL |
-| --------- | --- |
-| Kong API  | `http://localhost:8000` (`/games/*`, `/wallets/*`) |
-| Games     | `http://localhost:4001` |
-| Wallets   | `http://localhost:4002` |
-| Keycloak  | `http://localhost:8080` (realm `crash-game`, client público com PKCE) |
-| Frontend  | `http://localhost:3000` (Docker: `vite preview`; local: `vite dev`) |
+```bash
+cd services/games && bun run test && bun run test:e2e
+cd services/wallets && bun run test && bun run test:e2e
+cd frontend && bun run test
+```
 
-### Nota sobre o frontend no Docker
+E2E that needs the stack running can be skipped with `SKIP_E2E=1`.
 
-O `Dockerfile` e o `docker-compose.yml` passam os mesmos `VITE_*` que o `frontend/.env.example` (Kong + URLs diretas a games/wallets + Keycloak). O `vite dev` continua a ler `frontend/.env` local.
-
-### Evitar artefactos `.js` em `frontend/src`
-
-Não commits ficheiros `.js` gerados ao lado de `.ts`/`.tsx`: o bundler no Docker pode resolver o `.js` e o ecrã fica diferente do `pnpm dev`. O `frontend/.gitignore` ignora `src/**/*.js`.
-
----
-
-## Decisões de arquitetura
-
-- **Dois serviços (bounded contexts)** — **games** (rodadas, apostas, provably fair, WebSocket) e **wallets** (saldo em centavos), com PostgreSQL **separado** por serviço (`games` / `wallets`).
-- **Comunicação assíncrona** — RabbitMQ com routing keys estáveis; o wallet debita/credita em resposta a mensagens; o jogo publica pedidos e consome o resultado.
-- **API Gateway** — Kong em modo declarativo (`docker/kong/kong.yml`) para `/games` e `/wallets`; o WebSocket do jogo costuma ir **direto** à porta do games (Socket.IO não passa pelo Kong neste desenho).
-- **Identidade** — Keycloak (OIDC), JWT validado nos serviços com JWKS e issuer configuráveis.
-- **Camadas no backend** — `domain` (entidades, contratos de repositório), `application` (casos de uso e serviços de orquestração), `infrastructure` (Prisma, RabbitMQ), `presentation` (HTTP, WebSocket). Onde faz sentido, **portos** (ex.: barramento de mensagens) desacoplam a aplicação da implementação concreta de fila.
-- **Leituras** — Queries dedicadas em vez de injetar repositórios nos controllers para endpoints só de leitura.
-- **Dinheiro** — Valores em **centavos** (`bigint` / inteiros), sem `float` para saldo ou apostas.
-- **Frontend** — React + Vite, TanStack Query para dados remotos, Zustand para estado do jogo, Socket.IO para eventos em tempo real.
-
----
-
-## Trade-offs
-
-| Escolha | Benefício | Custo |
-| -------- | ---------- | ----- |
-| NestJS e exceções HTTP nos casos de uso | Integração simples com pipes, filtros e Swagger | Menos “framework-agnostic” do que erros de domínio puros mapeados no boundary |
-| Mensageria síncrona na perceção do jogador (aposta → débito) | Modelo claro para integração carteira | Latência e necessidade de idempotência / correlação nas mensagens |
-| WebSocket fora do Kong | Menos configuração de upgrade no gateway | URL do socket diferente da API base no cliente (`VITE_SOCKET_URL`) |
-| Imagem Docker do frontend com build de produção | Paridade com deploy estático | Sem HMR; variáveis `VITE_*` fixas no build; rebuild para mudar env |
-| Init SQL em ficheiro na raiz (`postgres-init-databases.sql`) | Evita scripts `.sh` com CRLF no Windows no Docker | Caminho de montagem explícito no compose em vez de só `docker/postgres/` |
-| Limite de aposta elevado no código (ex.: R$ 10.000) | Flexível para testes e demo | Deve alinhar com risco de produto e regras reais se isto fosse produção |
-
----
-
-Para requisitos completos do desafio (regras do jogo, critérios de avaliação, bónus), consulta o material enviado pela empresa ou o `documentation-rules.md` se existir no repositório.
+The original assignment is in `documentation-rules.md`.
