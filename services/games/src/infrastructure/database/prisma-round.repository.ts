@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "./generated";
-import type { LeaderboardEntry, RoundRepository } from "../../domain/round.repository";
-import { Round, Bet, RoundStatus, BetStatus } from "../../domain/round.entity";
+import type { LeaderboardEntry, OutboxCommand, RoundRepository } from "../../domain/round.repository";
+import { Round, Bet, RoundStatus, BetStatus, DomainError } from "../../domain/round.entity";
 import { PrismaService } from "./prisma.service";
 import type { Round as PrismaRound, Bet as PrismaBet } from "./generated";
 
@@ -126,16 +126,60 @@ export class PrismaRoundRepository implements RoundRepository {
     return this.toDomain(record);
   }
 
-  async createBet(bet: Bet): Promise<void> {
-    await this.prisma.bet.create({
-      data: {
-        id: bet.id,
-        roundId: bet.roundId,
-        userId: bet.userId,
-        username: bet.username,
-        amountCents: bet.amountCents,
-        status: bet.status,
-      },
+  async createBetWithOutbox(bet: Bet, outbox: OutboxCommand): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.bet.create({
+          data: {
+            id: bet.id,
+            roundId: bet.roundId,
+            userId: bet.userId,
+            username: bet.username,
+            amountCents: bet.amountCents,
+            status: bet.status,
+          },
+        });
+        await tx.outboxMessage.create({
+          data: {
+            routingKey: outbox.routingKey,
+            payload: outbox.payload as Prisma.InputJsonValue,
+          },
+        });
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new DomainError("You already have a bet in this round");
+      }
+      throw err;
+    }
+  }
+
+  async cashOutWithOutbox(
+    betId: string,
+    data: {
+      cashoutMultiplierHundredths: bigint;
+      payoutCents: bigint;
+    },
+    outbox: OutboxCommand,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.bet.updateMany({
+        where: { id: betId, status: "ACTIVE" },
+        data: {
+          status: "WON",
+          cashoutMultiplierHundredths: data.cashoutMultiplierHundredths,
+          payoutCents: data.payoutCents,
+        },
+      });
+      if (updated.count !== 1) {
+        throw new DomainError("You have already cashed out or your bet is not active");
+      }
+      await tx.outboxMessage.create({
+        data: {
+          routingKey: outbox.routingKey,
+          payload: outbox.payload as Prisma.InputJsonValue,
+        },
+      });
     });
   }
 
@@ -144,7 +188,7 @@ export class PrismaRoundRepository implements RoundRepository {
       where: { id: round.id },
       data: {
         status: round.status,
-        crashPoint: round.crashPoint,
+        crashPointHundredths: round.crashPointHundredths,
         startedAt: round.startedAt,
         crashedAt: round.crashedAt,
       },
@@ -153,13 +197,17 @@ export class PrismaRoundRepository implements RoundRepository {
 
   async updateBetStatus(
     betId: string,
-    data: { status: BetStatus; cashoutMultiplier?: number; payoutCents?: bigint },
+    data: {
+      status: BetStatus;
+      cashoutMultiplierHundredths?: bigint;
+      payoutCents?: bigint;
+    },
   ): Promise<void> {
     await this.prisma.bet.update({
       where: { id: betId },
       data: {
         status: data.status,
-        cashoutMultiplier: data.cashoutMultiplier,
+        cashoutMultiplierHundredths: data.cashoutMultiplierHundredths,
         payoutCents: data.payoutCents,
       },
     });
@@ -170,7 +218,7 @@ export class PrismaRoundRepository implements RoundRepository {
     return new Round({
       id: record.id,
       status: record.status as RoundStatus,
-      crashPoint: record.crashPoint ?? null,
+      crashPointHundredths: record.crashPointHundredths ?? null,
       serverSeed: record.serverSeed ?? "",
       serverSeedHash: record.serverSeedHash,
       clientSeed: record.clientSeed,
@@ -191,7 +239,7 @@ export class PrismaRoundRepository implements RoundRepository {
       username: b.username,
       amountCents: b.amountCents,
       status: b.status as BetStatus,
-      cashoutMultiplier: b.cashoutMultiplier ?? null,
+      cashoutMultiplierHundredths: b.cashoutMultiplierHundredths ?? null,
       payoutCents: b.payoutCents ?? null,
       createdAt: b.createdAt,
     });

@@ -45,9 +45,15 @@ describe("Round entity", () => {
       expect(() => round.placeBet(makeBet("user-1", 99n))).toThrow(DomainError);
     });
 
-    it("rejects bet above maximum (1,000,000 cents)", () => {
+    it("rejects bet above maximum (100000 cents)", () => {
       const round = makeBettingRound();
-      expect(() => round.placeBet(makeBet("user-1", 1_000_001n))).toThrow(DomainError);
+      expect(() => round.placeBet(makeBet("user-1", 100_001n))).toThrow(DomainError);
+    });
+
+    it("accepts the maximum stake of 1000.00", () => {
+      const round = makeBettingRound();
+      round.placeBet(makeBet("user-1", 100_000n));
+      expect(round.bets).toHaveLength(1);
     });
 
     it("rejects bet when round is not in BETTING status", () => {
@@ -73,23 +79,39 @@ describe("Round entity", () => {
   });
 
   describe("cashOutBet", () => {
-    it("marks bet as WON and returns correct payout", () => {
+    it("marks bet as WON and returns an integer payout", () => {
       const round = makeBettingRound();
       const bet = makeBet("user-1", 10000n);
       round.placeBet(bet);
       round.activateBet("user-1");
       round.start();
 
-      const payout = round.cashOutBet("user-1", 2.5);
-      expect(payout).toBe(25000n); // 10000 * 2.5 = 25000
+      const payout = round.cashOutBet("user-1", 250n);
+      expect(payout).toBe(25000n);
       expect(round.getBetByUserId("user-1")?.status).toBe(BetStatus.WON);
+      expect(round.getBetByUserId("user-1")?.cashoutMultiplierHundredths).toBe(250n);
+    });
+
+    it("truncates a fractional cent", () => {
+      const bet = new Bet({
+        id: "bet-user-1",
+        roundId: "round-1",
+        userId: "user-1",
+        username: "user-1",
+        amountCents: 3n,
+        status: BetStatus.ACTIVE,
+        createdAt: new Date(),
+      });
+      const round = makeBettingRound([bet]);
+      round.start();
+      expect(round.cashOutBet("user-1", 150n)).toBe(4n);
     });
 
     it("prevents cashout during BETTING phase", () => {
       const round = makeBettingRound();
       round.placeBet(makeBet("user-1", 10000n));
       round.activateBet("user-1");
-      expect(() => round.cashOutBet("user-1", 2.0)).toThrow(DomainError);
+      expect(() => round.cashOutBet("user-1", 200n)).toThrow(DomainError);
     });
   });
 
@@ -101,9 +123,9 @@ describe("Round entity", () => {
       round.activateBet("user-1");
       round.start();
 
-      const losingBets = round.crash(1.5);
+      const losingBets = round.crash(150n);
       expect(round.status).toBe(RoundStatus.CRASHED);
-      expect(round.crashPoint).toBe(1.5);
+      expect(round.crashPointHundredths).toBe(150n);
       expect(losingBets).toHaveLength(1);
       expect(losingBets[0].status).toBe(BetStatus.LOST);
     });
@@ -113,9 +135,9 @@ describe("Round entity", () => {
       round.placeBet(makeBet("user-1", 5000n));
       round.activateBet("user-1");
       round.start();
-      round.cashOutBet("user-1", 1.5);
+      round.cashOutBet("user-1", 150n);
 
-      const losingBets = round.crash(2.0);
+      const losingBets = round.crash(200n);
       expect(losingBets).toHaveLength(0);
     });
   });

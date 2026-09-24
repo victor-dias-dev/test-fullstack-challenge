@@ -9,7 +9,7 @@ describe("api types", () => {
       serverSeedHash: "hash",
       bettingEndsAt: new Date().toISOString(),
       startedAt: null,
-      currentMultiplier: null,
+      currentMultiplierHundredths: null,
       bets: [],
     };
     expect(round.bets).toHaveLength(0);
@@ -21,7 +21,7 @@ describe("api types", () => {
       username: "player",
       amountCents: "100",
       status: "WON",
-      cashoutMultiplier: 2.5,
+      cashoutMultiplierHundredths: "250",
       payoutCents: "250",
     };
     expect(bet.status).toBe("WON");

@@ -121,24 +121,24 @@ export class GamesController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Cash out at the current multiplier" })
   async cashout(@Req() req: AuthRequest) {
-    const multiplier = this.lifecycle.getCurrentMultiplier();
+    const multiplierHundredths = this.lifecycle.getCurrentMultiplierHundredths();
 
     const result = await this.cashOut.execute(
       { userId: req.user.sub },
-      multiplier,
+      multiplierHundredths,
     );
 
     const roundId = this.lifecycle.getCurrentRoundId();
     this.gateway.emitCashout({
       roundId: roundId ?? result.betId,
       username: req.user.preferred_username,
-      multiplier: result.multiplier,
+      multiplierHundredths: result.multiplierHundredths.toString(),
       payoutCents: result.payoutCents.toString(),
     });
 
     return {
       betId: result.betId,
-      multiplier: result.multiplier,
+      multiplierHundredths: result.multiplierHundredths.toString(),
       payoutCents: result.payoutCents.toString(),
     };
   }

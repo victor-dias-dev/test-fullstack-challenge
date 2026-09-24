@@ -22,7 +22,7 @@ export class GetMyBetsQuery {
         roundId: b.roundId,
         amountCents: b.amountCents.toString(),
         status: b.status,
-        cashoutMultiplier: b.cashoutMultiplier,
+        cashoutMultiplierHundredths: b.cashoutMultiplierHundredths?.toString() ?? null,
         payoutCents: b.payoutCents?.toString() ?? null,
         createdAt: b.createdAt.toISOString(),
       })),

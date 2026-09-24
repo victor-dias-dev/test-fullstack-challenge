@@ -10,20 +10,19 @@ import {
   type GameMessageBus,
 } from "./ports/game-message-bus.port";
 
-const BETTING_PHASE_MS = 10_000;  // 10 seconds
-const MULTIPLIER_TICK_MS = 100;   // emit every 100ms
+const BETTING_PHASE_MS = 10_000;
+const MULTIPLIER_TICK_MS = 100;
 
 @Injectable()
 export class RoundLifecycleService implements OnModuleInit {
   private readonly logger = new Logger(RoundLifecycleService.name);
-  private currentMultiplier = 1.0;
+  private currentMultiplierHundredths = 100n;
   private roundStartTime = 0;
   private currentRoundId: string | null = null;
   private tickInterval: ReturnType<typeof setInterval> | null = null;
 
-  // These will be injected by the WebSocket gateway after init
-  private onMultiplierTick?: (multiplier: number, elapsed: number) => void;
-  private onRoundCrashed?: (roundId: string, crashPoint: number, round: Round) => void;
+  private onMultiplierTick?: (multiplierHundredths: bigint, elapsed: number) => void;
+  private onRoundCrashed?: (roundId: string, crashPointHundredths: bigint, round: Round) => void;
   private onRoundBetting?: (round: Round, endsAt: Date) => void;
   private onRoundStarted?: (round: Round) => void;
   private onBetActivated?: (bet: { id: string; roundId: string; userId: string; username: string; amountCents: bigint }) => void;
@@ -37,7 +36,6 @@ export class RoundLifecycleService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // Subscribe to wallet responses
     this.messageBus.subscribe(
       MESSAGING_ROUTING_KEYS.WALLET_DEBITED,
       async (msg) => await this.handleWalletDebited(msg),
@@ -47,13 +45,12 @@ export class RoundLifecycleService implements OnModuleInit {
       async (msg) => await this.handleWalletDebitFailed(msg),
     );
 
-    // Start lifecycle loop
     setTimeout(() => this.startNewRound(), 1000);
   }
 
   setCallbacks(callbacks: {
-    onMultiplierTick?: (multiplier: number, elapsed: number) => void;
-    onRoundCrashed?: (roundId: string, crashPoint: number, round: Round) => void;
+    onMultiplierTick?: (multiplierHundredths: bigint, elapsed: number) => void;
+    onRoundCrashed?: (roundId: string, crashPointHundredths: bigint, round: Round) => void;
     onRoundBetting?: (round: Round, endsAt: Date) => void;
     onRoundStarted?: (round: Round) => void;
     onBetActivated?: (bet: { id: string; roundId: string; userId: string; username: string; amountCents: bigint }) => void;
@@ -67,8 +64,13 @@ export class RoundLifecycleService implements OnModuleInit {
     this.onBetCancelled = callbacks.onBetCancelled;
   }
 
+  /** Display value derived from the published integer hundredths. */
   getCurrentMultiplier(): number {
-    return this.currentMultiplier;
+    return Number(this.currentMultiplierHundredths) / 100;
+  }
+
+  getCurrentMultiplierHundredths(): bigint {
+    return this.currentMultiplierHundredths;
   }
 
   getCurrentRoundId(): string | null {
@@ -80,7 +82,11 @@ export class RoundLifecycleService implements OnModuleInit {
       const { serverSeed, serverSeedHash } = ProvablyFairService.generateServerSeed();
       const clientSeed = ProvablyFairService.generateClientSeed();
       const nonce = 0;
-      const crashPoint = ProvablyFairService.calculateCrashPoint(serverSeed, clientSeed, nonce);
+      const crashPointHundredths = ProvablyFairService.calculateCrashPointHundredths(
+        serverSeed,
+        clientSeed,
+        nonce,
+      );
       const bettingEndsAt = new Date(Date.now() + BETTING_PHASE_MS);
 
       const round = new Round({
@@ -95,39 +101,37 @@ export class RoundLifecycleService implements OnModuleInit {
 
       await this.roundRepository.save(round);
       this.currentRoundId = round.id;
-      this.logger.log(`New round ${round.id} — crash at ${crashPoint}x (hidden)`);
+      this.logger.log(
+        `New round ${round.id} — crash at ${crashPointHundredths} hundredths (hidden)`,
+      );
 
       this.onRoundBetting?.(round, bettingEndsAt);
 
-      // Wait for betting phase
       await this.delay(BETTING_PHASE_MS);
 
-      // Transition to RUNNING
       round.start();
       await this.roundRepository.updateRoundStatus(round);
       this.onRoundStarted?.(round);
 
       this.roundStartTime = Date.now();
-      this.currentMultiplier = 1.0;
+      this.currentMultiplierHundredths = 100n;
 
-      // Tick multiplier
       await new Promise<void>((resolve) => {
         this.tickInterval = setInterval(async () => {
           const elapsed = Date.now() - this.roundStartTime;
-          this.currentMultiplier = this.computeMultiplier(elapsed);
+          this.currentMultiplierHundredths = this.computeMultiplierHundredths(elapsed);
 
-          this.onMultiplierTick?.(this.currentMultiplier, elapsed);
+          this.onMultiplierTick?.(this.currentMultiplierHundredths, elapsed);
 
-          if (this.currentMultiplier >= crashPoint) {
+          if (this.currentMultiplierHundredths >= crashPointHundredths) {
             clearInterval(this.tickInterval!);
             this.tickInterval = null;
-            await this.handleCrash(round, crashPoint);
+            await this.handleCrash(round, crashPointHundredths);
             resolve();
           }
         }, MULTIPLIER_TICK_MS);
       });
 
-      // Brief pause before next round
       await this.delay(3000);
       void this.startNewRound();
     } catch (err) {
@@ -137,26 +141,26 @@ export class RoundLifecycleService implements OnModuleInit {
     }
   }
 
-  private async handleCrash(round: Round, crashPoint: number): Promise<void> {
+  private async handleCrash(round: Round, crashPointHundredths: bigint): Promise<void> {
     const freshRound = await this.roundRepository.findById(round.id);
     if (!freshRound) return;
 
-    const losingBets = freshRound.crash(crashPoint);
+    const losingBets = freshRound.crash(crashPointHundredths);
     await this.roundRepository.updateRoundStatus(freshRound);
 
-    // Mark losing bets in DB
     for (const bet of losingBets) {
       await this.roundRepository.updateBetStatus(bet.id, { status: BetStatus.LOST });
     }
 
-    this.onRoundCrashed?.(freshRound.id, crashPoint, freshRound);
-    this.logger.log(`Round ${freshRound.id} crashed at ${crashPoint}x`);
+    this.onRoundCrashed?.(freshRound.id, crashPointHundredths, freshRound);
+    this.logger.log(`Round ${freshRound.id} crashed at ${crashPointHundredths} hundredths`);
   }
 
   private async handleWalletDebited(msg: Record<string, unknown>): Promise<void> {
     const betId = msg.betId as string;
     const bet = await this.roundRepository.findBetById(betId);
     if (!bet) return;
+    if (bet.status !== BetStatus.PENDING) return;
 
     await this.roundRepository.updateBetStatus(betId, { status: BetStatus.ACTIVE });
     this.onBetActivated?.({
@@ -171,13 +175,16 @@ export class RoundLifecycleService implements OnModuleInit {
   private async handleWalletDebitFailed(msg: Record<string, unknown>): Promise<void> {
     const betId = msg.betId as string;
     const userId = msg.userId as string;
+    const bet = await this.roundRepository.findBetById(betId);
+    if (!bet || bet.status !== BetStatus.PENDING) return;
+
     await this.roundRepository.updateBetStatus(betId, { status: BetStatus.CANCELLED });
     this.onBetCancelled?.(betId, userId);
   }
 
-  private computeMultiplier(elapsedMs: number): number {
-    // Exponential growth: e^(0.00006 * elapsedMs)
-    return Math.round(Math.exp(0.00006 * elapsedMs) * 100) / 100;
+  private computeMultiplierHundredths(elapsedMs: number): bigint {
+    const hundredths = Math.round(Math.exp(0.00006 * elapsedMs) * 100);
+    return BigInt(Math.max(100, hundredths));
   }
 
   private delay(ms: number): Promise<void> {

@@ -7,7 +7,7 @@ export interface MyBet {
   betId: string;
   amountCents: bigint;
   status: "PENDING" | "ACTIVE" | "WON" | "LOST" | "CANCELLED";
-  cashoutMultiplier?: number;
+  cashoutMultiplierHundredths?: string;
   payoutCents?: bigint;
 }
 

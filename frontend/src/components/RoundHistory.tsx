@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, HistoryRound } from "../lib/api";
+import { hundredthsToNumber } from "../lib/money";
 
-function CrashBadge({ crashPoint }: { crashPoint: number }) {
+function CrashBadge({ crashPointHundredths }: { crashPointHundredths: string }) {
+  const crashPoint = hundredthsToNumber(crashPointHundredths);
   let color = "bg-[#ff336620] text-[#ff3366] border-[#ff336640]";
   if (crashPoint >= 5) color = "bg-[#00ff8820] text-[#00ff88] border-[#00ff8840]";
   else if (crashPoint >= 2) color = "bg-[#ffcc0020] text-[#ffcc00] border-[#ffcc0040]";
@@ -31,9 +33,11 @@ export function RoundHistory() {
         <p className="text-xs text-[#4a4a6a]">No rounds yet</p>
       ) : (
         <div className="flex flex-wrap gap-2">
-          {rounds.map((r) => (
-            <CrashBadge key={r.id} crashPoint={r.crashPoint} />
-          ))}
+          {rounds.map((r) =>
+            r.crashPointHundredths ? (
+              <CrashBadge key={r.id} crashPointHundredths={r.crashPointHundredths} />
+            ) : null,
+          )}
         </div>
       )}
     </div>

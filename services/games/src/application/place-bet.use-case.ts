@@ -1,17 +1,10 @@
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-} from "@nestjs/common";
+import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { v4 as uuidv4 } from "uuid";
+import { MAX_BET_CENTS, MIN_BET_CENTS } from "../domain/bet-limits";
+import { Bet, DomainError, RoundStatus } from "../domain/round.entity";
+import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
 import { ROUND_REPOSITORY } from "../domain/round.repository";
 import type { RoundRepository } from "../domain/round.repository";
-import { Bet, RoundStatus } from "../domain/round.entity";
-import { MESSAGING_ROUTING_KEYS } from "../domain/messaging-routing-keys";
-import {
-  GAME_MESSAGE_BUS,
-  type GameMessageBus,
-} from "./ports/game-message-bus.port";
 
 export interface PlaceBetCommand {
   userId: string;
@@ -24,8 +17,6 @@ export class PlaceBetUseCase {
   constructor(
     @Inject(ROUND_REPOSITORY)
     private readonly roundRepository: RoundRepository,
-    @Inject(GAME_MESSAGE_BUS)
-    private readonly messageBus: GameMessageBus,
   ) {}
 
   async execute(command: PlaceBetCommand): Promise<{ betId: string; roundId: string }> {
@@ -41,11 +32,11 @@ export class PlaceBetUseCase {
       throw new BadRequestException("You already have a bet in this round");
     }
 
-    if (command.amountCents < 100n) {
+    if (command.amountCents < MIN_BET_CENTS) {
       throw new BadRequestException("Minimum bet is 1.00 (100 cents)");
     }
-    if (command.amountCents > 1_000_000n) {
-      throw new BadRequestException("Maximum bet is 10000.00 (1,000,000 cents)");
+    if (command.amountCents > MAX_BET_CENTS) {
+      throw new BadRequestException("Maximum bet is 1000.00 (100000 cents)");
     }
 
     const betId = uuidv4();
@@ -60,15 +51,22 @@ export class PlaceBetUseCase {
       createdAt: new Date(),
     });
 
-    await this.roundRepository.createBet(bet);
-
-    // Publish debit request — wallet service responds via wallet.debited / wallet.debit.failed
-    await this.messageBus.publish(MESSAGING_ROUTING_KEYS.WALLET_DEBIT, {
-      betId,
-      userId: command.userId,
-      amountCents: command.amountCents.toString(),
-      correlationId,
-    });
+    try {
+      await this.roundRepository.createBetWithOutbox(bet, {
+        routingKey: MESSAGING_ROUTING_KEYS.WALLET_DEBIT,
+        payload: {
+          betId,
+          userId: command.userId,
+          amountCents: command.amountCents.toString(),
+          correlationId,
+        },
+      });
+    } catch (err) {
+      if (err instanceof DomainError) {
+        throw new BadRequestException(err.message);
+      }
+      throw err;
+    }
 
     return { betId, roundId: round.id };
   }

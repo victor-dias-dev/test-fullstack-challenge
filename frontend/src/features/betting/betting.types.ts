@@ -5,7 +5,7 @@ export interface PlaceBetResponse {
 
 export interface CashOutResponse {
   betId: string;
-  multiplier: number;
+  multiplierHundredths: string;
   payoutCents: string;
 }
 

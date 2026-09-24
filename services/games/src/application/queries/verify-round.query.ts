@@ -23,7 +23,7 @@ export class VerifyRoundQuery {
       };
     }
 
-    const { valid, expectedCrashPoint } = ProvablyFairService.verify(
+    const { valid, expectedCrashPointHundredths } = ProvablyFairService.verify(
       round.serverSeed,
       round.serverSeedHash,
       round.clientSeed,
@@ -37,8 +37,8 @@ export class VerifyRoundQuery {
       serverSeedHash: round.serverSeedHash,
       clientSeed: round.clientSeed,
       nonce: round.nonce,
-      expectedCrashPoint,
-      actualCrashPoint: round.crashPoint,
+      expectedCrashPointHundredths: expectedCrashPointHundredths?.toString() ?? null,
+      actualCrashPointHundredths: round.crashPointHundredths?.toString() ?? null,
     };
   }
 }

@@ -1,0 +1,19 @@
+name: Bug
+description: Something in the reference does not match its own rules
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened
+      description: Include the command, the service, and the balance or crash point you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: Where you ran it
+      description: Commit SHA, Docker Compose or local Bun, and which test if you have one.
+    validations:
+      required: true

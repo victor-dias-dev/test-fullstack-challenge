@@ -1,6 +1,7 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { GamePhase, MyBet } from "../../stores/gameStore";
 import type { PlaceBetResponse, CashOutResponse } from "./betting.types";
+import { formatMultiplier } from "../../lib/money";
 
 interface BetPrimaryActionsProps {
   phase: GamePhase;
@@ -111,7 +112,9 @@ export function BetPrimaryActions({
           <p className="mt-1 text-xl font-black tabular-nums text-[#00ff88]">
             R$ {(Number(myBet.payoutCents ?? 0n) / 100).toFixed(2)}
           </p>
-          <p className="text-sm text-[#86ffc0]">Cashed at {myBet.cashoutMultiplier?.toFixed(2)}×</p>
+          <p className="text-sm text-[#86ffc0]">
+            Cashed at {formatMultiplier(myBet.cashoutMultiplierHundredths)}×
+          </p>
         </div>
       )}
 

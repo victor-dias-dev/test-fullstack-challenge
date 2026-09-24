@@ -1,7 +1,6 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { InsufficientFundsError } from "../domain/wallet.entity";
+import { Inject, Injectable } from "@nestjs/common";
 import { WALLET_REPOSITORY } from "../domain/wallet.repository";
-import type { WalletRepository } from "../domain/wallet.repository";
+import type { LedgerResult, WalletRepository } from "../domain/wallet.repository";
 
 export interface DebitWalletCommand {
   userId: string;
@@ -17,38 +16,10 @@ export class DebitWalletUseCase {
     private readonly walletRepository: WalletRepository,
   ) {}
 
-  async execute(
-    command: DebitWalletCommand,
-  ): Promise<{ success: boolean; error?: string }> {
-    // Idempotency: skip if already processed
-    const alreadyProcessed = await this.walletRepository.existsByCorrelationId(
-      command.correlationId,
-    );
-    if (alreadyProcessed) {
-      return { success: true };
+  async execute(command: DebitWalletCommand): Promise<LedgerResult> {
+    if (command.amountCents <= 0n) {
+      return { outcome: "REJECTED", reason: "Debit amount must be positive" };
     }
-
-    const wallet = await this.walletRepository.findByUserId(command.userId);
-    if (!wallet) {
-      return { success: false, error: "Wallet not found" };
-    }
-
-    try {
-      wallet.debit(command.amountCents);
-    } catch (err) {
-      if (err instanceof InsufficientFundsError) {
-        return { success: false, error: "Insufficient funds" };
-      }
-      throw err;
-    }
-
-    await this.walletRepository.updateBalance(wallet.id, wallet.balanceCents, {
-      type: "DEBIT",
-      amountCents: command.amountCents,
-      correlationId: command.correlationId,
-      description: command.description,
-    });
-
-    return { success: true };
+    return this.walletRepository.applyDebit(command);
   }
 }

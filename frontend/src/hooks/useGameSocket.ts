@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useGameStore } from "../stores/gameStore";
 import type { BetResponse } from "../lib/api";
+import { hundredthsToNumber } from "../lib/money";
 import { playCrashSound } from "../lib/gameSounds";
 
 /** Socket.IO on games service (Kong in this project does not proxy WS) */
@@ -27,17 +28,17 @@ export function useGameSocket() {
       store.setMultiplier(1.0);
     });
 
-    socket.on("multiplier:update", (data: { multiplier: number }) => {
-      store.setMultiplier(data.multiplier);
+    socket.on("multiplier:update", (data: { multiplierHundredths: string }) => {
+      store.setMultiplier(hundredthsToNumber(data.multiplierHundredths));
     });
 
-    socket.on("round:crashed", (data: { roundId: string; crashPoint: number }) => {
+    socket.on("round:crashed", (data: { roundId: string; crashPointHundredths: string }) => {
       playCrashSound();
       const st = useGameStore.getState();
       if (st.myBet?.status === "ACTIVE") {
         st.updateMyBet({ status: "LOST" });
       }
-      store.setCrash(data.crashPoint);
+      store.setCrash(hundredthsToNumber(data.crashPointHundredths));
     });
 
     socket.on(
@@ -53,7 +54,7 @@ export function useGameSocket() {
           username: data.username,
           amountCents: data.amountCents,
           status: "ACTIVE",
-          cashoutMultiplier: null,
+          cashoutMultiplierHundredths: null,
           payoutCents: null,
         };
         store.addLiveBet(liveBet);
@@ -81,7 +82,7 @@ export function useGameSocket() {
       (data: {
         roundId?: string;
         username: string;
-        multiplier: number;
+        multiplierHundredths: string;
         payoutCents: string;
       }) => {
         store.setLiveBets(
@@ -90,7 +91,7 @@ export function useGameSocket() {
               ? {
                   ...b,
                   status: "WON",
-                  cashoutMultiplier: data.multiplier,
+                  cashoutMultiplierHundredths: data.multiplierHundredths,
                   payoutCents: data.payoutCents,
                 }
               : b,

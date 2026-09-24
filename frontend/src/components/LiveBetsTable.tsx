@@ -1,4 +1,5 @@
 import { useGameStore } from "../stores/gameStore";
+import { formatMultiplier } from "../lib/money";
 
 export function LiveBetsTable() {
   const { liveBets } = useGameStore();
@@ -37,9 +38,9 @@ export function LiveBetsTable() {
             <span className="text-[#4a4a6a] text-xs">
               R${(Number(bet.amountCents) / 100).toFixed(2)}
             </span>
-            {bet.status === "WON" && bet.cashoutMultiplier && (
+            {bet.status === "WON" && bet.cashoutMultiplierHundredths && (
               <span className="text-[#00ff88] font-bold text-xs">
-                {bet.cashoutMultiplier.toFixed(2)}x
+                {formatMultiplier(bet.cashoutMultiplierHundredths)}x
               </span>
             )}
             {bet.status === "LOST" && (

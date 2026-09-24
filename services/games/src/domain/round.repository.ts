@@ -6,6 +6,11 @@ export interface LeaderboardEntry {
   profitCents: bigint;
 }
 
+export interface OutboxCommand {
+  routingKey: string;
+  payload: Record<string, unknown>;
+}
+
 export interface RoundRepository {
   findById(id: string): Promise<Round | null>;
   findCurrent(): Promise<Round | null>;
@@ -14,13 +19,21 @@ export interface RoundRepository {
   findBetsByUserId(userId: string, page: number, limit: number): Promise<{ bets: Bet[]; total: number }>;
   findLeaderboardByProfit(since: Date, limit: number): Promise<LeaderboardEntry[]>;
   save(round: Round): Promise<Round>;
-  createBet(bet: Bet): Promise<void>;
+  createBetWithOutbox(bet: Bet, outbox: OutboxCommand): Promise<void>;
+  cashOutWithOutbox(
+    betId: string,
+    data: {
+      cashoutMultiplierHundredths: bigint;
+      payoutCents: bigint;
+    },
+    outbox: OutboxCommand,
+  ): Promise<void>;
   updateRoundStatus(round: Round): Promise<void>;
   updateBetStatus(
     betId: string,
     data: {
       status: BetStatus;
-      cashoutMultiplier?: number;
+      cashoutMultiplierHundredths?: bigint;
       payoutCents?: bigint;
     },
   ): Promise<void>;

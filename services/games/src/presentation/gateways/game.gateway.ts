@@ -35,17 +35,17 @@ export class GameGateway implements OnGatewayInit {
           startedAt: new Date().toISOString(),
         });
       },
-      onMultiplierTick: (multiplier, elapsed) => {
+      onMultiplierTick: (multiplierHundredths, elapsed) => {
         this.server.emit("multiplier:update", {
           roundId: this.lifecycle.getCurrentRoundId(),
-          multiplier,
+          multiplierHundredths: multiplierHundredths.toString(),
           elapsedMs: elapsed,
         });
       },
-      onRoundCrashed: (roundId, crashPoint, round) => {
+      onRoundCrashed: (roundId, crashPointHundredths, round) => {
         this.server.emit("round:crashed", {
           roundId,
-          crashPoint,
+          crashPointHundredths: crashPointHundredths.toString(),
           serverSeed: round.serverSeed,
           clientSeed: round.clientSeed,
           nonce: round.nonce,
@@ -70,7 +70,7 @@ export class GameGateway implements OnGatewayInit {
   emitCashout(payload: {
     roundId: string;
     username: string;
-    multiplier: number;
+    multiplierHundredths: string;
     payoutCents: string;
   }): void {
     this.server.emit("bet:cashout", payload);
